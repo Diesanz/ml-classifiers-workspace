@@ -1,17 +1,145 @@
-\documentclass{article}
-\usepackage[utf8]{inputenc}
-\usepackage[spanish]{babel}
-\usepackage{hyperref}
+\documentclass[12pt,a4paper]{article}
 
-\title{Proyecto de Clasificación: Primera Etapa}
-\author{Gonzalo Agúndez Sáez \and Paula Negro Asegurado \and Diego Sanz Santos}
-\date{19 de Octubre 2026}
+% --- Paquetes básicos ---
+\usepackage[spanish]{babel}     % Español
+\usepackage[utf8]{inputenc}     % Acentos
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}     % Idioma
+\usepackage{geometry}           % Márgenes
+\usepackage{graphicx}           % Imágenes
+\usepackage{float}              % Posición exacta de figuras
+\usepackage{hyperref}           % Hipervínculos
+\usepackage{xcolor}             % Colores
+\usepackage{fancyhdr}           % Encabezados y pies de página
+\usepackage{titlesec}           % Formato de títulos
+\usepackage{listingsutf8}       % Soporte UTF-8 en listing
+\usepackage{listings}           % Código
+\usepackage{caption}            % Personalizar captions
+\usepackage{amsmath, amssymb}   % Símbolos matemáticos
+\usepackage{booktabs}           % Tablas elegantes
+\usepackage{listings}           % Código
+\usepackage{longtable}
+\usepackage[table]{xcolor}
+\usepackage{listings}
+\usepackage{xcolor}
+
+
+% --- Configuración de códigos ---
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!10},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible,
+  inputencoding=utf8,
+  extendedchars=true,
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1
+}
+
+% Estilo para Bash
+\lstdefinestyle{miEstiloBash}{
+    language=bash,
+    basicstyle=\small\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    breaklines=true,
+    captionpos=b
+}
+
+% Estilo para Scala
+\lstdefinestyle{miEstiloScala}{
+    language=Scala,
+    basicstyle=\small\ttfamily,
+    backgroundcolor=\color{gray!5},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black}\itshape,
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    breaklines=true,
+    captionpos=b,
+    morekeywords={val, var, def, class, object, trait, extends, with, match, case, new, if, else, for, while, return, type, import, package}
+}
+
+% Estilo para Java
+\lstdefinestyle{miEstiloJava}{
+    language=Java,
+    basicstyle=\small\ttfamily,
+    backgroundcolor=\color{gray!5},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black}\itshape,
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    breaklines=true,
+    captionpos=b
+}
+
+% --- Configuración de márgenes ---
+\geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm}
+
+% --- Configuración de hipervínculos ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=cyan
+}
+
+% --- Encabezados y pies de página ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Universidad de Valladolid}
+\fancyhead[R]{Máster en Ingeniería Informática}
+\fancyfoot[C]{\thepage}
+
+% --- Formato de títulos ---
+\titleformat{\chapter}[hang]{\bfseries\huge}{\thechapter.}{1em}{}
+\titleformat{\section}[hang]{\bfseries\Large}{\thesection}{1em}{}
+
+% -- Información para la portada
+\title{\LARGE \textbf{Proyecto de Clasificación: Primera Etapa}}
+\author{{\large \textbf{Autores:}}\\[0.2cm]
+    Gonzalo Agúndez Sáez \\
+    Paula Negro Asegurado \\
+    Diego Sanz Santos }
+\date{\normalsize \today}
+
+\makeatletter
+\let\thetitle\@title
+\let\theauthor\@author
+\let\thedate\@date
+\makeatother
 
 \begin{document}
-\maketitle
-\tableofcontents 
 
-\clearpage
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    \includegraphics[width=0.7\textwidth]{logoInfo.png}\\[1cm] % Descomentar si se tiene el logo
+
+    {\Huge \bfseries \thetitle}\\[1.5cm]
+
+    {\Large \bfseries Asignatura: Técnicas escalables de análisis de datos (Clasificadores)}\\[0.3cm]
+    {\large Escuela de Ingeniería Informática}\\[1.5cm]
+
+    \theauthor \\[0.3cm]
+    \textbf{Curso:} 2026 -- 2027 \\[0.3cm]
+    \textbf{Fecha:} \thedate
+
+    \vfill
+    \rule{0.5\linewidth}{0.5pt}\\
+    \textit{Universidad de Valladolid}
+\end{titlepage}
+
+\tableofcontents
+\newpage
 \section{Introducción}
 % Breve introducción al documento
 TO DO
