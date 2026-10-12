@@ -1,0 +1,4 @@
+venv
+.gitmessage.txt
+./Scripts/train.csv
+*.csv
