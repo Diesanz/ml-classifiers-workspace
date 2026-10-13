@@ -22,6 +22,7 @@
 \usepackage[table]{xcolor}
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{seqsplit}
 
 
 % --- Configuración de códigos ---
@@ -143,47 +144,19 @@
 \section{Introducción}
 % Breve introducción al documento
 
-%Numéricos Discretos: Son valores que sirven para contar unidades enteras. No admiten fracciones ni valores intermedios porque representan cosas indivisibles.
-
-%Ejemplo: El número de pasajeros (1, 2, 3...). No puedes tener 1.5 pasajeros.
-
-%Numéricos Continuos: Son valores que sirven para medir con precisión. Pueden tener infinitos decimales y tomar cualquier valor intermedio dentro de un rango.
-
-%Ejemplo: Las coordenadas geográficas (latitud y longitud), el peso o una distancia exacta en kilómetros.
-
-%Nominales: Son etiquetas o códigos que representan categorías sin ningún orden lógico o jerarquía. No tienen valor matemático, es decir, no se pueden sumar ni se puede decir que uno sea "mayor" que otro.
-
-%Ejemplo: El código de identificación del viaje (id), el nombre de una calle, o el código del proveedor (vendor_id, donde ser el proveedor 2 no te hace "mayor" que el proveedor 1, es solo un nombre).
-
-%Ordinales: Son categorías (normalmente texto) que sí tienen un orden o escala jerárquica, pero donde la distancia matemática exacta entre ellas no importa.
-
-%Ejemplo: La nueva variable que vas a crear para la duración del viaje ("short", "medium", "long"). Tienen un orden claro de menor a mayor.
-
-%Booleanos (o Binarios): Es un atributo nominal especial que solo admite dos estados posibles y excluyentes.
-
-%Ejemplo: Verdadero/Falso, o Sí/No (como la variable store_and_fwd_flag que solo tiene los valores 'Y' o 'N').
-
 \section{Resumen Ejecutivo del Conjunto de Datos}
-% Máximo 500 palabras (origen, propósito, tamaño, atributos y clases)
 \begin{itemize}
-    \item \textbf{Origen de los datos:} https://www.kaggle.com/c/nyc-taxi-trip-duration
-    \item \textbf{Objetivo del trabajo:} El objetivo es la predicción de la duración del viaje.
-    \item \textbf{Tamaño del conjunto de datos:} $1458644$ instancias
-    \item \textbf{Número de atributos:}
+    \item \textbf{Origen de los datos:} competición de Kaggle \textit{New York City Taxi Trip Duration}, basada en los registros de taxis amarillos de Nueva York de 2016 publicados por la NYC Taxi and Limousine Commission (TLC). Se ha utilizado el fichero \texttt{train.csv} disponible en \url{https://www.kaggle.com/c/nyc-taxi-trip-duration/data}.
+    \item \textbf{Propósito:} El proposito es predecir la duración de un viaje en taxi a partir de sus atributos (tiempo, coordenadas, pasajeros, etc.). En este trabajo se emplean para un problema de \textbf{clasificación multiclase}: predecir si un viaje es corto, medio o largo.
+    \item \textbf{Tamaño:} 1\,458\,644 instancias y 11 atributos originales.
+    \item \textbf{Atributos (11 en total):}
     \begin{itemize}
-        \item \textbf{id:} Nominal 
-        \item \textbf{vendor\_id:} Nominal
-        \item \textbf{pickup\_datetime:} Nominal (temporal)
-        \item \textbf{dropoff\_datetime:} Nominal (temporal)
-        \item \textbf{passenger\_count:} Numérico discreto
-        \item \textbf{pickup\_longitude:} Numérico continuo
-        \item \textbf{pickup\_latitude:} Numérico continuo
-        \item \textbf{dropoff\_longitude:} Numérico continuo
-        \item \textbf{dropoff\_latitude:} Numérico continuo
-        \item \textbf{store\_and\_fwd\_flag:} Booleano
-        \item \textbf{trip\_duration:} Número discreto
+        \item \textbf{Nominales (4):} \texttt{id} (identificador único del viaje), \texttt{vendor\_id} (proveedor del registro) y las marcas temporales \texttt{pickup\_datetime} y \texttt{dropoff\_datetime}.
+        \item \textbf{Numéricos continuos (4):} \texttt{pickup\_longitude}, \texttt{pickup\_latitude}, \seqsplit{\texttt{dropoff\_longitude}} y \texttt{dropoff\_latitude}.
+        \item \textbf{Numéricos discretos (2):} \texttt{passenger\_count} y \texttt{trip\_duration} (en segundos).
+        \item \textbf{Booleanos (1):} \texttt{store\_and\_fwd\_flag} (Y/N).
     \end{itemize}
-    \item \textbf{Descripción de la clase:} TODO
+    \item \textbf{Descripción de la clase:} la clase se construye a partir de \texttt{trip\_duration}, que se descarta como atributo predictor. Se definen tres etiquetas: \textit{short} (duración $\leq$ 10 min), \textit{medium} (entre 10 y 25 min) y \textit{long} ($>$ 25 min). La distribución es: \textit{short} 44,76\,\%, \textit{medium} 42,87\,\%, \textit{long} 12,37\,\%.
 \end{itemize}
 
 %Limpieza inicial ("tonta"): Eliminar los registros que estén vacíos o sean no válidos en el DataFrame original.   División: Crear las particiones para los conjuntos de entrenamiento y prueba.   Limpieza profunda, selección y transformación:Tratar los valores ausentes, inconsistentes, el ruido y los outliers.   Seleccionar atributos y construir nuevos a partir de los originales.   Realizar las transformaciones necesarias para obtener las columnas features y labels (aquí es donde transformarás la duración a "short", "medium" y "long").   La regla de oro en el tercer paso es que cualquier ajuste de un modelo de transformación (estimator) se entrena o ajusta (hacer fit) únicamente sobre el conjunto de entrenamiento, y luego se aplica exactamente igual al conjunto de prueba.%
@@ -191,7 +164,7 @@
 \section{Exploración de Datos}
 \subsection{Descripción del problema}
 
-% Importante decir que los datos están recogidos del 20 de julio de 2017 a 16 de septiembre de 2017 %
+% Importante decir que los datos están recogidos del 20 de julio de 2017 a 16 de septiembre de 2017 % Para ello mirar el min y maximo no lo que pone en kaggle pq es la fecha de la competicion
 
 El problema es predecir la duración total de un viaje en taxi en la ciudad de Nueva York.
 \subsection{Descripción del conjunto de datos}
