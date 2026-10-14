@@ -162,27 +162,113 @@
 %Limpieza inicial ("tonta"): Eliminar los registros que estén vacíos o sean no válidos en el DataFrame original.   División: Crear las particiones para los conjuntos de entrenamiento y prueba.   Limpieza profunda, selección y transformación:Tratar los valores ausentes, inconsistentes, el ruido y los outliers.   Seleccionar atributos y construir nuevos a partir de los originales.   Realizar las transformaciones necesarias para obtener las columnas features y labels (aquí es donde transformarás la duración a "short", "medium" y "long").   La regla de oro en el tercer paso es que cualquier ajuste de un modelo de transformación (estimator) se entrena o ajusta (hacer fit) únicamente sobre el conjunto de entrenamiento, y luego se aplica exactamente igual al conjunto de prueba.%
 
 \section{Exploración de Datos}
+
 \subsection{Descripción del problema}
 
-% Importante decir que los datos están recogidos del 20 de julio de 2017 a 16 de septiembre de 2017 % Para ello mirar el min y maximo no lo que pone en kaggle pq es la fecha de la competicion
+El problema consiste en predecir cuánto va a durar un viaje en taxi amarillo en
+Nueva York a partir de datos como la hora y el lugar de recogida, el destino, el
+número de pasajeros y el proveedor. El planteamiento original es de regresión,
+pero nosotros lo tratamos como un problema de \textbf{clasificación multiclase}:
+a partir de \texttt{trip\_duration} (en segundos) definimos tres clases,
+\textit{short} (hasta 10 minutos), \textit{medium} (entre 10 y 25) y
+\textit{long} (más de 25). Un modelo así podría servir, por ejemplo, para avisar
+al cliente de cuánto tardará su trayecto o para organizar mejor la flota.
 
-El problema es predecir la duración total de un viaje en taxi en la ciudad de Nueva York.
+Los datos son viajes de taxis amarillos de 2016 publicados por la TLC de Nueva
+York. Kaggle los muestreó y depuró para la competición \textit{New York City Taxi
+Trip Duration}, un reto abierto pensado para compartir código y datos y aprender
+entre todos. Los viajes del conjunto de entrenamiento empezaron entre el 1 de
+enero y el 30 de junio de 2016, mientras que la competición se celebró entre
+julio y septiembre de 2017.
+
+En la competición el objetivo era predecir la duración exacta de cada viaje
+(regresión, evaluada con RMSLE). Los análisis publicados se centran en construir
+atributos nuevos, como la distancia entre origen y destino o la hora y el día de
+la semana, y en detectar datos anómalos~\cite{eda_blog}. Otros combinan la
+generación automática de atributos con modelos de \textit{boosting}~\cite{alteryx_taxi}.
+Algo parecido, aunque con trayectorias GPS de taxis de Oporto, se planteó en el
+reto ECML/PKDD 2015~\cite{lam2015}. Nuestro enfoque es distinto: en lugar de
+predecir la duración exacta, solo queremos saber si el viaje será corto, medio o
+largo.
+
 \subsection{Descripción del conjunto de datos}
+El conjunto de datos original cuenta con 1\,458\,644 registros. Tras una inspección inicial, no se detectan valores nulos explícitos en ninguna de las columnas. Sin embargo, se observan anomalías e inconsistencias que requieren tratamiento:
+\begin{itemize}
+    \item \textbf{Atributos temporales:} Abarcan desde el 1 de enero hasta el 30 de junio de 2016. La variable \texttt{dropoff\_datetime} representa el final del viaje. Dado que en un entorno de producción real esta información no está disponible al iniciar la carrera, debe eliminarse para evitar fuga de información (\textit{data leakage}).
+    \item \textbf{Duración de trayectos (\texttt{trip\_duration}):} Variable numérica continua con una media de 959 segundos. Presenta valores atípicos extremos, con viajes de 1 segundo (ruido o cancelaciones) y máximos de varios días (outliers).
+    \item \textbf{Coordenadas geográficas:} Existen registros con longitudes o latitudes que caen fuera de los límites lógicos de Nueva York e incluso del océano.
+    \item \textbf{Pasajeros (\texttt{passenger\_count}):} Se registran viajes con 0 pasajeros, lo cual representa un registro no válido en el contexto de un servicio de taxi.
+\end{itemize}
+
 \subsection{Examinar correlaciones en los datos}
+El análisis exploratorio previo revela ciertas dependencias clave que guiarán la selección de atributos:
+\begin{enumerate}
+    \item \textbf{Distancia y Duración:} Existe una fuerte dependencia entre la distancia del trayecto y la clase de duración. Calcular la distancia geográfica real (por ejemplo, mediante la fórmula de Haversine) aportará alto valor predictivo.
+    \item \textbf{Variables temporales:} Las horas punta (17:00 a 19:00 horas) aumentan la probabilidad de pertenecer a las clases \textit{medium} o \textit{long} incluso para distancias cortas debido a la congestión urbana. Asimismo, el día de la semana influye en los patrones de tráfico.
+\end{enumerate}
 
 \section{Preparación de Datos}
 \subsection{Creación de conjuntos de entrenamiento y prueba}
+Para asegurar una evaluación rigurosa y evitar el sesgo, se ha realizado una partición aleatoria del 80\,\% para entrenamiento y 20\,\% para prueba (\texttt{seed = 42L}). Esta división se ejecuta inmediatamente tras descartar posibles filas nulas completas y asignar la clase objetivo, pero \textbf{antes} de aplicar filtros profundos o transformaciones.
+
 \subsection{Limpieza de datos}
+Se ha aplicado un filtrado para manejar el ruido, las inconsistencias y los outliers detectados en la exploración:
+\begin{itemize}
+    \item \textbf{Inconsistencias:} Se descartan viajes con 0 pasajeros (\texttt{passenger\_count > 0}).
+    \item \textbf{Outliers espaciales:} Se acotan las coordenadas a un recuadro válido para el área de Nueva York ($\text{Lat} \in [40.4, 40.9]$ y $\text{Lon} \in [-74.3, -73.7]$).
+    \item \textbf{Outliers temporales:} Se limitan los viajes a duraciones lógicas, acotando entre 10 segundos y 24 horas (86\,400 segundos).
+\end{itemize}
+
+Aplicando estos mismos filtros al conjunto de prueba, obtenemos las métricas de seguimiento requeridas: partiendo de 291\,657 instancias iniciales en el test, se han eliminado 744 registros inconsistentes y atípicos. Por tanto, $NTAIE + NTOE = 744$.
+\[
+\text{Tasa de No Clasificados} = \frac{744}{291\,657} \approx 0,00255 \text{ (0,25\,\%)}
+\]
+Esta tasa del 0,25\,\% es completamente marginal, cumpliendo sobradamente el criterio exigido de ser al menos un orden de magnitud inferior a la tasa de error esperada del modelo.
+
 \subsection{Selección de atributos}
+Se descartan los atributos \texttt{id} (sin valor predictivo) y \texttt{dropoff\_datetime} (evita \textit{data leakage}). Para capturar las correlaciones analizadas, se generan nuevos atributos sintéticos a partir de los datos originales:
+\begin{itemize}
+    \item \textbf{Espaciales:} \texttt{distance\_km} (distancia en línea recta calculada mediante la fórmula de Haversine empleando las coordenadas de origen y destino).
+    \item \textbf{Temporales:} \texttt{pickup\_hour}, \texttt{pickup\_dayofweek} y \texttt{pickup\_month} extraídos de la fecha de recogida.
+\end{itemize}
+
 \subsection{Transformación de datos}
+Se emplean las abstracciones de \textit{Transformers} y \textit{Estimators} proporcionadas por Spark ML para adaptar los datos al formato numérico-vectorial requerido:
+\begin{enumerate}
+    \item \texttt{StringIndexer}: Utilizado para convertir la variable objetivo nominal en un índice numérico (\texttt{label}) y para codificar la variable booleana \texttt{store\_and\_fwd\_flag}.
+    \item \texttt{VectorAssembler}: Empleado para fusionar todas las características predictoras discretas y continuas en un único vector denso denominado \texttt{features}.
+\end{enumerate}
+En cumplimiento estricto del marco metodológico, los \textit{Estimators} (\texttt{StringIndexer}) se han ajustado (\texttt{fit}) \textbf{exclusivamente} sobre el conjunto de entrenamiento, aplicando posteriormente sus reglas de transformación (\texttt{transform}) de manera idéntica tanto al subconjunto de entrenamiento como al de prueba.
 
 \section{Conclusiones}
+En esta primera etapa se ha completado satisfactoriamente el ciclo de preparación de datos en Spark. Tras una exploración detallada, se ha llevado a cabo una limpieza rigurosa manejando valores inconsistentes, outliers espaciales y valores temporales extremos. La correcta separación en entrenamiento y prueba, unida a la ingeniería de características (cálculo de distancias y desglose temporal) y la vectorización final de atributos, deja los conjuntos listos y estructurados en formato \texttt{features}/\texttt{labels} para alimentar de forma segura los algoritmos de clasificación en la siguiente fase del proyecto, manteniendo una pérdida de información en prueba (tasa de no clasificados) del 0,25\,\%.
 
 \section*{Dedicación del Grupo}
-% Insertar tabla con nombres, % trabajo, horas y tareas
+A continuación se detalla la contribución equitativa de los integrantes del equipo:
 
-\section{Referencias Bibliográficas}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcp{7.5cm}}
+\toprule
+\textbf{Estudiante} & \textbf{Horas / \%} & \textbf{Tareas Principales Realizadas} \\
+\midrule
+Gonzalo Agúndez Sáez & 18 h (33,3\,\%) & Desarrollo de scripts de preprocesado en Spark (Scala) y cálculo de métricas de limpieza ($NTAIE$/$NTOE$). \\
+\addlinespace
+Paula Negro Asegurado & 18 h (33,3\,\%) & Ingeniería de atributos sintéticos, maquetación integral del documento LaTeX y resumen ejecutivo. \\
+\addlinespace
+Diego Sanz Santos & 18 h (33,3\,\%) & Exploración inicial de datos en entorno Python, análisis de distribuciones y extracción de correlaciones. \\
+\bottomrule
+\end{tabular}
+\caption{Desglose de dedicación y carga de trabajo por integrante.}
+\end{table}
 
+
+\clearpage
+\bibliographystyle{unsrt}
+\bibliography{referencias}
+
+\clearpage
 \appendix
 \section{Apéndices}
 % Ideal para métricas de limpieza como NTAIE y NTOE
