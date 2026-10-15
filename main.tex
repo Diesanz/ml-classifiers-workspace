@@ -192,60 +192,70 @@ predecir la duración exacta, solo queremos saber si el viaje será corto, medio
 largo.
 
 \subsection{Descripción del conjunto de datos}
-El conjunto de datos original cuenta con 1\,458\,644 registros. Tras una inspección inicial, no se detectan valores nulos explícitos en ninguna de las columnas. Sin embargo, se observan anomalías e inconsistencias que requieren tratamiento:
+El conjunto de datos original \texttt{train.csv} cuenta con 1\,458\,644 registros. Tras una inspección inicial, no se detectan valores nulos explícitos estructurales, pero sí se identifican anomalías que requieren tratamiento para evitar el deterioro del modelo:
 \begin{itemize}
-    \item \textbf{Atributos temporales:} Abarcan desde el 1 de enero hasta el 30 de junio de 2016. La variable \texttt{dropoff\_datetime} representa el final del viaje. Dado que en un entorno de producción real esta información no está disponible al iniciar la carrera, debe eliminarse para evitar fuga de información (\textit{data leakage}).
-    \item \textbf{Duración de trayectos (\texttt{trip\_duration}):} Variable numérica continua con una media de 959 segundos. Presenta valores atípicos extremos, con viajes de 1 segundo (ruido o cancelaciones) y máximos de varios días (outliers).
-    \item \textbf{Coordenadas geográficas:} Existen registros con longitudes o latitudes que caen fuera de los límites lógicos de Nueva York e incluso del océano.
-    \item \textbf{Pasajeros (\texttt{passenger\_count}):} Se registran viajes con 0 pasajeros, lo cual representa un registro no válido en el contexto de un servicio de taxi.
+    \item \textbf{Atributos temporales:} Abarcan desde el 1 de enero hasta el 30 de junio de 2016. La variable \texttt{dropoff\_datetime} representa el instante de finalización del viaje. Puesto que en un escenario predictivo real esta información no está disponible al iniciar la carrera, debe eliminarse para evitar fuga de información (\textit{data leakage}).
+    \item \textbf{Duración de trayectos (\texttt{trip\_duration}):} Variable numérica continua con una media de 959 segundos. Presenta valores atípicos extremos, con viajes de 1 segundo (posibles cancelaciones) y máximos de varios días (errores del sistema u outliers).
+    \item \textbf{Coordenadas geográficas:} Existen registros de origen y destino (\texttt{longitude} y \texttt{latitude}) fuera de los límites lógicos de la ciudad de Nueva York.
+    \item \textbf{Pasajeros (\texttt{passenger\_count}):} Se registran viajes con 0 pasajeros, un estado inconsistente en la prestación de un servicio de taxi.
 \end{itemize}
 
-\subsection{Examinar correlaciones en los datos}
-El análisis exploratorio previo revela ciertas dependencias clave que guiarán la selección de atributos:
+\subsection{Examinación de correlaciones}
+El análisis exploratorio revela dependencias clave que guían la ingeniería de atributos:
 \begin{enumerate}
-    \item \textbf{Distancia y Duración:} Existe una fuerte dependencia entre la distancia del trayecto y la clase de duración. Calcular la distancia geográfica real (por ejemplo, mediante la fórmula de Haversine) aportará alto valor predictivo.
-    \item \textbf{Variables temporales:} Las horas punta (17:00 a 19:00 horas) aumentan la probabilidad de pertenecer a las clases \textit{medium} o \textit{long} incluso para distancias cortas debido a la congestión urbana. Asimismo, el día de la semana influye en los patrones de tráfico.
+    \item \textbf{Distancia y Duración:} Existe una evidente correlación positiva entre la distancia del trayecto y la clase de duración (\textit{short, medium, long}). Sin embargo, las coordenadas en bruto son difíciles de procesar para un clasificador. Se hace necesario calcular la distancia geográfica real (fórmula de Haversine).
+    \item \textbf{Variables temporales:} Las horas punta (especialmente entre las 17:00 y las 19:00 horas) y el día de la semana influyen en la congestión del tráfico, aumentando la probabilidad de que viajes cortos en distancia se conviertan en largos en duración.
 \end{enumerate}
 
-\section{Preparación de Datos}
+\section{Preparación de datos}
 \subsection{Creación de conjuntos de entrenamiento y prueba}
-Para asegurar una evaluación rigurosa y evitar el sesgo, se ha realizado una partición aleatoria del 80\,\% para entrenamiento y 20\,\% para prueba (\texttt{seed = 42L}). Esta división se ejecuta inmediatamente tras descartar posibles filas nulas completas y asignar la clase objetivo, pero \textbf{antes} de aplicar filtros profundos o transformaciones.
+Para asegurar una evaluación rigurosa y evitar sesgos o fugas de información, se ha realizado una partición aleatoria del 80\,\% para entrenamiento y 20\,\% para prueba (\texttt{seed = 42L}). Esta división se ejecuta inmediatamente tras descartar posibles filas nulas completas y construir la variable objetivo, pero \textbf{antes} de aplicar filtros profundos o realizar ajustes matemáticos.
 
 \subsection{Limpieza de datos}
-Se ha aplicado un filtrado para manejar el ruido, las inconsistencias y los outliers detectados en la exploración:
+En base a la exploración previa, se aplica un filtrado estructurado sobre el conjunto de entrenamiento para manejar inconsistencias y outliers:
 \begin{itemize}
+    \item \textbf{Valores nulos (Programación defensiva):} Aunque la exploración no reveló valores nulos, se incluye una etapa preventiva de eliminación (\texttt{na.drop()}) para garantizar la robustez del \textit{pipeline} ante posibles datos defectuosos en el futuro.
     \item \textbf{Inconsistencias:} Se descartan viajes con 0 pasajeros (\texttt{passenger\_count > 0}).
-    \item \textbf{Outliers espaciales:} Se acotan las coordenadas a un recuadro válido para el área de Nueva York ($\text{Lat} \in [40.4, 40.9]$ y $\text{Lon} \in [-74.3, -73.7]$).
-    \item \textbf{Outliers temporales:} Se limitan los viajes a duraciones lógicas, acotando entre 10 segundos y 24 horas (86\,400 segundos).
+    \item \textbf{Outliers espaciales:} Se acotan las coordenadas al recuadro geográfico válido para el área de Nueva York ($\text{Lat} \in [40.4, 40.9]$ y $\text{Lon} \in [-74.3, -73.7]$).
+    \item \textbf{Outliers temporales:} Se limitan los viajes a duraciones factibles, acotando entre 10 segundos y 24 horas (86\,400 segundos).
 \end{itemize}
 
-Aplicando estos mismos filtros al conjunto de prueba, obtenemos las métricas de seguimiento requeridas: partiendo de 291\,657 instancias iniciales en el test, se han eliminado 744 registros inconsistentes y atípicos. Por tanto, $NTAIE + NTOE = 744$.
+Evaluando estas mismas reglas de limpieza en el conjunto de prueba para el control de calidad, obtenemos las siguientes métricas partiendo de 291\,657 instancias iniciales:
 \[
-\text{Tasa de No Clasificados} = \frac{744}{291\,657} \approx 0,00255 \text{ (0,25\,\%)}
+\text{Tasa de No Clasificados} = \frac{NTAIE + NTOE}{\text{Total Test}} = \frac{744}{291\,657} \approx 0,00255 \text{ (0,25\,\%)}
 \]
-Esta tasa del 0,25\,\% es completamente marginal, cumpliendo sobradamente el criterio exigido de ser al menos un orden de magnitud inferior a la tasa de error esperada del modelo.
+Esta tasa de pérdida del 0,25\,\% cumple ampliamente con el criterio establecido de ser al menos un orden de magnitud inferior a la tasa de error esperada del clasificador.
 
 \subsection{Selección de atributos}
-Se descartan los atributos \texttt{id} (sin valor predictivo) y \texttt{dropoff\_datetime} (evita \textit{data leakage}). Para capturar las correlaciones analizadas, se generan nuevos atributos sintéticos a partir de los datos originales:
+Se descartan atributos sin valor predictivo (\texttt{id}) y aquellos que introducen \textit{data leakage} (\texttt{dropoff\_datetime}). A su vez, se construyen nuevos atributos predictivos:
 \begin{itemize}
-    \item \textbf{Espaciales:} \texttt{distance\_km} (distancia en línea recta calculada mediante la fórmula de Haversine empleando las coordenadas de origen y destino).
-    \item \textbf{Temporales:} \texttt{pickup\_hour}, \texttt{pickup\_dayofweek} y \texttt{pickup\_month} extraídos de la fecha de recogida.
+    \item \textbf{Espaciales:} \texttt{distance\_km}, que calcula la distancia en línea recta mediante la fórmula de Haversine empleando las coordenadas de origen y destino.
+    \item \textbf{Temporales:} \texttt{pickup\_hour}, \texttt{pickup\_dayofweek} y \texttt{pickup\_month}, extraídos del \textit{timestamp} de inicio.
 \end{itemize}
 
 \subsection{Transformación de datos}
-Se emplean las abstracciones de \textit{Transformers} y \textit{Estimators} proporcionadas por Spark ML para adaptar los datos al formato numérico-vectorial requerido:
+Para adaptar los datos numéricos y categóricos al formato vectorial exigido por los algoritmos de clasificación de Apache Spark ML, se implementaron los siguientes procesos:
 \begin{enumerate}
-    \item \texttt{StringIndexer}: Utilizado para convertir la variable objetivo nominal en un índice numérico (\texttt{label}) y para codificar la variable booleana \texttt{store\_and\_fwd\_flag}.
-    \item \texttt{VectorAssembler}: Empleado para fusionar todas las características predictoras discretas y continuas en un único vector denso denominado \texttt{features}.
+    \item \texttt{StringIndexer} (\textit{Estimator}): Se utiliza para convertir la variable objetivo nominal en un índice numérico continuo (\texttt{label}) y para codificar banderas binarias. Se ajusta (\texttt{fit}) exclusivamente sobre el conjunto de entrenamiento.
+    \item \texttt{VectorAssembler} (\textit{Transformer}): Condensa los 11 atributos seleccionados en un único vector denso denominado \texttt{features}.
 \end{enumerate}
-En cumplimiento estricto del marco metodológico, los \textit{Estimators} (\texttt{StringIndexer}) se han ajustado (\texttt{fit}) \textbf{exclusivamente} sobre el conjunto de entrenamiento, aplicando posteriormente sus reglas de transformación (\texttt{transform}) de manera idéntica tanto al subconjunto de entrenamiento como al de prueba.
+No se ha aplicado una normalización matemática (como \texttt{StandardScaler}) sobre el vector resultante dado que el enfoque principal de modelado a utilizar (Árboles de Decisión) realiza particiones basadas en umbrales de información y es completamente invariante a la escala de las características.
 
 \section{Conclusiones}
-En esta primera etapa se ha completado satisfactoriamente el ciclo de preparación de datos en Spark. Tras una exploración detallada, se ha llevado a cabo una limpieza rigurosa manejando valores inconsistentes, outliers espaciales y valores temporales extremos. La correcta separación en entrenamiento y prueba, unida a la ingeniería de características (cálculo de distancias y desglose temporal) y la vectorización final de atributos, deja los conjuntos listos y estructurados en formato \texttt{features}/\texttt{labels} para alimentar de forma segura los algoritmos de clasificación en la siguiente fase del proyecto, manteniendo una pérdida de información en prueba (tasa de no clasificados) del 0,25\,\%.
+En esta primera etapa se ha completado satisfactoriamente el ciclo de comprensión y preparación de datos en el entorno Big Data (Spark/Scala). A diferencia de enfoques básicos, se ha priorizado la ingeniería de características, transformando datos geográficos en bruto en distancias métricas y desglosando variables temporales para enriquecer la capacidad de predicción.
 
-\section*{Dedicación del Grupo}
+El tratamiento de valores atípicos y ruidosos ha sido riguroso, y la correcta abstracción mediante tuberías de transformación garantiza que las reglas descubiertas en el conjunto de entrenamiento se apliquen de forma estéril al conjunto de prueba. El resultado final son dos DataFrames limpios, vectorizados y optimizados, listos para la fase de entrenamiento de algoritmos de clasificación.
+
+\section{Carga de trabajo}
+\subsection{Problemas}
+Los principales obstáculos abordados incluyeron:
+\begin{itemize}
+    \item \textbf{Curva de aprendizaje en Scala y Spark ML:} La adaptación del entorno interactivo a la creación de \textit{Estimators} y \textit{Transformers} funcionales requirió un esfuerzo de documentación significativo.
+    \item \textbf{Encadenamiento en la consola de comandos (REPL):} Se resolvieron errores de compilación multilínea derivados de la sintaxis del punto de concatenación en el shell de Spark.
+\end{itemize}
+
+\subsection{Reparto de tareas y dedicación}
 A continuación se detalla la contribución equitativa de los integrantes del equipo:
-
 \begin{table}[H]
 \centering
 \small
@@ -253,23 +263,13 @@ A continuación se detalla la contribución equitativa de los integrantes del eq
 \toprule
 \textbf{Estudiante} & \textbf{Horas / \%} & \textbf{Tareas Principales Realizadas} \\
 \midrule
-Gonzalo Agúndez Sáez & 18 h (33,3\,\%) & Desarrollo de scripts de preprocesado en Spark (Scala) y cálculo de métricas de limpieza ($NTAIE$/$NTOE$). \\
+Gonzalo Agúndez Sáez & 18 h (33,3\,\%) & Desarrollo de scripts de preprocesado en Spark (Scala), particiones, vectorización y cálculo NTAIE. \\
 \addlinespace
-Paula Negro Asegurado & 18 h (33,3\,\%) & Ingeniería de atributos sintéticos, maquetación integral del documento LaTeX y resumen ejecutivo. \\
+Paula Negro Asegurado & 18 h (33,3\,\%) & Ingeniería de atributos espaciotemporales, redacción integral de la memoria en LaTeX e investigación. \\
 \addlinespace
-Diego Sanz Santos & 18 h (33,3\,\%) & Exploración inicial de datos en entorno Python, análisis de distribuciones y extracción de correlaciones. \\
+Diego Sanz Santos & 18 h (33,3\,\%) & Exploración analítica en Python, extracción de estadísticas, detección de outliers y correlaciones. \\
 \bottomrule
 \end{tabular}
 \caption{Desglose de dedicación y carga de trabajo por integrante.}
 \end{table}
-
-
-\clearpage
-\bibliographystyle{unsrt}
-\bibliography{referencias}
-
-\clearpage
-\appendix
-\section{Apéndices}
-% Ideal para métricas de limpieza como NTAIE y NTOE
 \end{document}
