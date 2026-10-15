@@ -1,8 +1,3 @@
-// ============================================================================
-// Script de Preprocesado, Limpieza y Transformacion en Spark ML (Scala)
-// Asignatura: Tecnicas Escalables de Analisis de Datos (Clasificadores)
-// ============================================================================
-
 import org.apache.spark.sql.{SparkSession, DataFrame}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -10,6 +5,7 @@ import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 
 var PATH = "train.csv"
 
+// --- PASO 1: LECTURA Y COMPRENSION DE DATOS ---
 val taxiSchema = StructType(Array(
   StructField("id", StringType, true),
   StructField("vendor_id", IntegerType, true),
@@ -24,13 +20,14 @@ val taxiSchema = StructType(Array(
   StructField("trip_duration", LongType, true)
 ))
 
-val rawDF = spark.read.
-  option("header", "true").
-  schema(taxiSchema).
-  csv(PATH)
+val rawDF = spark.read.option("header", "true").schema(taxiSchema).csv(PATH)
 
+// --- PASO 2: LIMPIEZA PREVIA (Valores nulos explicitos) ---
+// Se eliminan nulos estructurales antes de crear atributos o dividir.
 val cleanInitialDF = rawDF.na.drop()
 
+// --- PASO 3: INGENIERIA DE LA VARIABLE OBJETIVO ---
+// Convertimos el problema de regresion (segundos) a clasificacion (short, medium, long)
 val dfWithClass = cleanInitialDF.
   withColumn("duration_min", col("trip_duration") / 60.0).
   withColumn("trip_class",
@@ -39,10 +36,14 @@ val dfWithClass = cleanInitialDF.
     otherwise("long")
   )
 
+// --- PASO 4: PARTICION TRAIN/TEST ---
+// Se divide ANTES de calcular metricas globales o entrenar transformadores para evitar "Data Leakage"
 val Array(trainRaw, testRaw) = dfWithClass.randomSplit(Array(0.8, 0.2), seed = 42L)
 trainRaw.cache()
 testRaw.cache()
 
+// --- PASO 5: LIMPIEZA PROFUNDA (Inconsistencias y Outliers) ---
+// Reglas estrictas aplicadas de forma funcional.
 def filterValidTrips(df: DataFrame): DataFrame = {
   df.filter(
     col("passenger_count") > 0 &&
@@ -54,18 +55,22 @@ def filterValidTrips(df: DataFrame): DataFrame = {
   )
 }
 
+// Aplicamos la limpieza independientemente a cada particion
 val trainClean = filterValidTrips(trainRaw)
 val testClean = filterValidTrips(testRaw)
 
+// --- PASO 6: EVALUACION DE LIMPIEZA (Calculo NTAIE + NTOE) ---
+// El enunciado exige reportar cuantos elementos se caen del test_set
 val initialTestCount = testRaw.count()
 val cleanTestCount = testClean.count()
 val NTAIE_NTOE = initialTestCount - cleanTestCount
 
-println("\n=== MÉTRICAS DE LIMPIEZA EN CONJUNTO DE PRUEBA ===")
+println("\n=== METRICAS DE LIMPIEZA EN CONJUNTO DE PRUEBA ===")
 println(s"Instancias iniciales en Test: $initialTestCount")
 println(s"Instancias eliminadas (NTAIE + NTOE): $NTAIE_NTOE")
 println(s"Tasa de no clasificados: ${NTAIE_NTOE.toDouble / initialTestCount.toDouble}\n")
 
+// --- PASO 7: CREACION DE NUEVOS ATRIBUTOS SINTETICOS ---
 val haversineKm = udf((lat1: Double, lon1: Double, lat2: Double, lon2: Double) => {
   val R = 6371.0
   val dLat = math.toRadians(lat2 - lat1)
@@ -87,6 +92,8 @@ def addFeatures(df: DataFrame): DataFrame = {
 val trainFeat = addFeatures(trainClean)
 val testFeat = addFeatures(testClean)
 
+// --- PASO 8: TRANSFORMACION (Estimators) ---
+// Aprenden las reglas SOLAMENTE en trainFeat (fit)
 val labelIndexer = new StringIndexer().
   setInputCol("trip_class").
   setOutputCol("label").
@@ -98,6 +105,8 @@ val flagIndexer = new StringIndexer().
   setHandleInvalid("keep").
   fit(trainFeat)
 
+// --- PASO 9: SELECCION FINAL DE ATRIBUTOS (Transformers) ---
+// Descartamos dropoff_datetime y trip_duration
 val featureCols = Array(
   "vendor_id", "passenger_count", "pickup_hour", "pickup_dayofweek",
   "pickup_month", "distance_km", "flag_indexed",
@@ -108,6 +117,7 @@ val assembler = new VectorAssembler().
   setInputCols(featureCols).
   setOutputCol("features")
 
+// --- PASO 10: APLICACION DE TRANSFORMACIONES A TRAIN Y TEST ---
 val trainIndexed = flagIndexer.transform(labelIndexer.transform(trainFeat))
 val testIndexed = flagIndexer.transform(labelIndexer.transform(testFeat))
 
@@ -115,5 +125,4 @@ val trainTransformed = assembler.transform(trainIndexed).select("features", "lab
 val testTransformed = assembler.transform(testIndexed).select("features", "label")
 
 println("=== PROCESAMIENTO COMPLETADO ===")
-println("Muestra del conjunto de entrenamiento transformado (features, label):")
 trainTransformed.show(5, truncate = false)
