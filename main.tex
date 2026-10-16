@@ -199,6 +199,56 @@ El conjunto de datos original \texttt{train.csv} cuenta con 1\,458\,644 registro
     \item \textbf{Coordenadas geográficas:} Existen registros de origen y destino (\texttt{longitude} y \texttt{latitude}) fuera de los límites lógicos de la ciudad de Nueva York.
     \item \textbf{Pasajeros (\texttt{passenger\_count}):} Se registran viajes con 0 pasajeros, un estado inconsistente en la prestación de un servicio de taxi.
 \end{itemize}
+A continuación se expone el resumen estadístico de los 11 atributos originales. Para los atributos numéricos, la asimetría fue calculada para identificar el sesgo, y la curtosis para determinar la concentración de datos y la presencia de posibles \textit{outliers} en distribuciones leptocúrticas.
+
+\subsubsection*{1. id}
+Identificador nominal único asignado a cada registro del conjunto de datos. Al ser una clave primaria de tipo cadena de caracteres, no presenta distribución estadística. Se descarta para el entrenamiento del modelo predictivo al carecer de información subyacente sobre el trayecto.
+% --- Tabla para vendor_id ---
+\begin{table}[H]
+\centering
+\caption{Distribución de frecuencias del atributo \texttt{vendor_id}.}
+\label{tab:dist_vendor_id}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lrr}
+\toprule
+Valor & Frecuencia & Porcentaje (%) \\
+\midrule
+2 & 780302 & 53.50 \\
+1 & 678342 & 46.50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection*{2. vendor\_id}
+Atributo nominal que indica el proveedor tecnológico asociado al vehículo que registró el viaje. Toma únicamente dos valores diferentes (1 y 2), representando a los dos sistemas de recolección de datos autorizados en la flota de taxis de Nueva York.
+
+\subsubsection*{3. pickup\_datetime}
+Atributo temporal (\textit{timestamp}) que representa la fecha y hora exactas de la activación del taxímetro y el inicio del trayecto. Su rango abarca desde el 1 de enero hasta el 30 de junio de 2016. Constituye la base para la extracción de nuevas características de alto valor predictivo (hora punta, mes, día de la semana).
+
+\subsubsection*{4. dropoff\_datetime}
+Atributo temporal (\textit{timestamp}) que indica la fecha y hora de finalización del trayecto. Aunque sus datos son consistentes con el marco temporal del estudio, este atributo se elimina del vector de características para evitar fuga de información (\textit{data leakage}), ya que la hora de destino es una incógnita al inicio del servicio predictivo.
+
+\subsubsection*{5. passenger\_count}
+Atributo numérico discreto que recoge el número de pasajeros en el vehículo. Presenta un rango natural de $[1, 6]$ delimitado por la capacidad máxima de la flota comercial. El análisis revela la existencia de valores anómalos, destacando una minoría de registros con 0 pasajeros, los cuales se catalogan como estados inconsistentes del sistema.
+
+\subsubsection*{6. pickup\_longitude}
+Atributo numérico continuo que refleja la coordenada de longitud de origen. El estadístico de curtosis y la visualización gráfica evidencian una distribución fuertemente leptocúrtica con colas extremas. Esto indica la presencia de valores atípicos severos (coordenadas de GPS erróneas o en medio del océano) que obligan a implementar un filtro geográfico (\textit{bounding box}).
+
+\subsubsection*{7. pickup\_latitude}
+Atributo numérico continuo referente a la latitud del inicio del trayecto. Su comportamiento estadístico es análogo al de la longitud de origen, presentando \textit{outliers} espaciales que exceden el recuadro lógico del estado de Nueva York (aproximadamente entre los paralelos $40.4$ y $40.9$).
+
+\subsubsection*{8. dropoff\_longitude}
+Atributo numérico continuo con la coordenada de longitud del final del trayecto. Su distribución de valores extremos hace necesaria la depuración espacial en el preprocesado para evitar distorsiones en el cálculo analítico de las distancias Haversine.
+
+\subsubsection*{9. dropoff\_latitude}
+Atributo numérico continuo que registra la latitud del destino. Presenta asimetría en sus valores mínimos y máximos absolutos ocasionada por interferencias en la señal satelital de los taxis, requiriendo el mismo tratamiento de recorte perimetral que las métricas de origen.
+
+\subsubsection*{10. store\_and\_fwd\_flag}
+Indicador booleano nominal (\texttt{Y}/\texttt{N}) que refleja si el registro del viaje tuvo que almacenarse temporalmente en la memoria del vehículo antes de enviarse al servidor debido a pérdidas de conexión. Su moda recae abrumadoramente en el valor \texttt{N}. El análisis exploratorio confirma que no aporta información predictiva sobre la duración del viaje.
+
+\subsubsection*{11. trip\_duration}
+Atributo numérico continuo que mide el tiempo total del viaje en segundos. Es el origen de la variable objetivo del modelo. Muestra una asimetría muy pronunciada hacia la derecha y una curtosis extremadamente elevada. Esto corrobora la existencia de anomalías severas consistentes en viajes residuales de 1 segundo (cancelaciones) y \textit{outliers} máximos de varias horas o días (taxímetros bloqueados).
 
 \subsection{Examinación de correlaciones}
 El análisis exploratorio revela dependencias clave que guían la ingeniería de atributos:
