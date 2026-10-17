@@ -203,52 +203,289 @@ A continuación se expone el resumen estadístico de los 11 atributos originales
 
 \subsubsection*{1. id}
 Identificador nominal único asignado a cada registro del conjunto de datos. Al ser una clave primaria de tipo cadena de caracteres, no presenta distribución estadística. Se descarta para el entrenamiento del modelo predictivo al carecer de información subyacente sobre el trayecto.
-% --- Tabla para vendor_id ---
+
+
+\subsubsection*{2. vendor\_id}
+Atributo nominal que indica el proveedor tecnológico asociado al vehículo que registró el viaje. Toma únicamente dos valores diferentes (1 y 2), representando a los dos sistemas de recolección de datos autorizados en la flota de taxis de Nueva York.
+
 \begin{table}[H]
 \centering
-\caption{Distribución de frecuencias del atributo \texttt{vendor_id}.}
 \label{tab:dist_vendor_id}
 \small
 \rowcolors{2}{gray!8}{white}
 \begin{tabular}{lrr}
 \toprule
-Valor & Frecuencia & Porcentaje (%) \\
+Valor & Frecuencia & Porcentaje (\%) \\
 \midrule
-2 & 780302 & 53.50 \\
-1 & 678342 & 46.50 \\
+1 & 678\,342 & 46.50\,\% \\
+2 & 780\,302 & 53.49\,\% \\
 \bottomrule
 \end{tabular}
+\caption{Distribución de frecuencias del atributo \texttt{vendor\_id}.}
 \end{table}
 
-\subsubsection*{2. vendor\_id}
-Atributo nominal que indica el proveedor tecnológico asociado al vehículo que registró el viaje. Toma únicamente dos valores diferentes (1 y 2), representando a los dos sistemas de recolección de datos autorizados en la flota de taxis de Nueva York.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/barras_vendor_id.png}
+\caption{Diagrama de barras para el atributo \texttt{vendor\_id}.}
+\label{fig:barras_vendor_id}
+\end{figure}
 
 \subsubsection*{3. pickup\_datetime}
 Atributo temporal (\textit{timestamp}) que representa la fecha y hora exactas de la activación del taxímetro y el inicio del trayecto. Su rango abarca desde el 1 de enero hasta el 30 de junio de 2016. Constituye la base para la extracción de nuevas características de alto valor predictivo (hora punta, mes, día de la semana).
 
+\begin{table}[H]
+\centering
+\label{tab:dist_pickup__datetime}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Rango & Valor \\
+\midrule
+Mínimo & 2016-01-01 00:00:17 \\
+Máximo & 2016-06-30 23:59:39 \\
+\bottomrule
+\end{tabular}
+\caption{Rango del atributo \texttt{pickup\_datetime}.}
+\end{table}
+
 \subsubsection*{4. dropoff\_datetime}
 Atributo temporal (\textit{timestamp}) que indica la fecha y hora de finalización del trayecto. Aunque sus datos son consistentes con el marco temporal del estudio, este atributo se elimina del vector de características para evitar fuga de información (\textit{data leakage}), ya que la hora de destino es una incógnita al inicio del servicio predictivo.
 
+\begin{table}[H]
+\centering
+\label{tab:dist_dropoff_datetime}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Rango & Valor \\
+\midrule
+Mínimo & 2016-01-01 00:03:31 \\
+Máximo & 2016-07-01 23:02:03 \\
+\bottomrule
+\end{tabular}
+\caption{Rango del atributo \texttt{dropoff\_datetime}.}
+\end{table}
+
 \subsubsection*{5. passenger\_count}
-Atributo numérico discreto que recoge el número de pasajeros en el vehículo. Presenta un rango natural de $[1, 6]$ delimitado por la capacidad máxima de la flota comercial. El análisis revela la existencia de valores anómalos, destacando una minoría de registros con 0 pasajeros, los cuales se catalogan como estados inconsistentes del sistema.
+Atributo numérico discreto que recoge el número de pasajeros en el vehículo. Presenta un rango de $[0, 9]$ delimitado por la capacidad máxima de la flota comercial. El análisis revela la existencia de valores anómalos, destacando una minoría de registros con 0 pasajeros, los cuales se catalogan como estados inconsistentes del sistema.
+
+\begin{table}[H]
+\centering
+\label{tab:dist_passenger_count}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lrr}
+\toprule
+Valor & Frecuencia & Porcentaje (\%) \\
+\midrule
+0 & 60 & 0.00 \\
+1 & 1\,033\,540 & 70.86 \\
+2 & 210\,318 & 14.42 \\
+5 & 78\,088 & 5.35 \\
+3 & 59\,896 & 4.11 \\
+6 & 48\,333 & 3.31 \\
+4 & 28\,404 & 1.95 \\
+0 & 60 & 0.00 \\
+7 & 3 & 0.00 \\
+9 & 1 & 0.00 \\
+8 & 1 & 0.00 \\
+9 & 1 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Distribución de frecuencias del atributo \texttt{passenger\_count}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/barras_passenger_count.png}
+\caption{Diagrama de barras para el atributo \texttt{passenger\_count}.}
+\label{fig:barras_passenger_count}
+\end{figure}
 
 \subsubsection*{6. pickup\_longitude}
 Atributo numérico continuo que refleja la coordenada de longitud de origen. El estadístico de curtosis y la visualización gráfica evidencian una distribución fuertemente leptocúrtica con colas extremas. Esto indica la presencia de valores atípicos severos (coordenadas de GPS erróneas o en medio del océano) que obligan a implementar un filtro geográfico (\textit{bounding box}).
 
+\begin{table}[H]
+\centering
+\label{tab:dist_pickup_longitude}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Estadística & Valor \\
+\midrule
+Mínimo & -121.933 \\
+Máximo & -61.3355 \\
+Media & -73.9735 \\
+Desviación típica & 0.0709019 \\
+Asimetría & -418.1 \\
+Curtosis & 288\,157 \\
+Valores distintos & 23\,047 \\
+\bottomrule
+\end{tabular}
+\caption{Estadísticas del atributo \texttt{pickup\_longitude}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/hist_pickup_longitude.png}
+\caption{Histograma para el atributo \texttt{hist\_pickup\_longitude}.}
+\label{fig:hist_pickup_longitude}
+\end{figure}
+
 \subsubsection*{7. pickup\_latitude}
 Atributo numérico continuo referente a la latitud del inicio del trayecto. Su comportamiento estadístico es análogo al de la longitud de origen, presentando \textit{outliers} espaciales que exceden el recuadro lógico del estado de Nueva York (aproximadamente entre los paralelos $40.4$ y $40.9$).
+
+\begin{table}[H]
+\centering
+\label{tab:dist_pickup_latitude}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Estadística & Valor \\
+\midrule
+Mínimo & 34.3597 \\
+Máximo & 51.8811 \\
+Media & 40.7509 \\
+Desviación típica & 0.0328812 \\
+Asimetría & 5.48913 \\
+Curtosis & 12\,950.2 \\
+Valores distintos & 42\,245 \\
+\bottomrule
+\end{tabular}
+\caption{Estadísticas del atributo \texttt{pickup\_latitude}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/hist_pickup_latitude.png}
+\caption{Histograma para el atributo \texttt{hist\_pickup\_latitude}.}
+\label{fig:hist_pickup_latitude}
+\end{figure}
+
 
 \subsubsection*{8. dropoff\_longitude}
 Atributo numérico continuo con la coordenada de longitud del final del trayecto. Su distribución de valores extremos hace necesaria la depuración espacial en el preprocesado para evitar distorsiones en el cálculo analítico de las distancias Haversine.
 
+\begin{table}[H]
+\centering
+\label{tab:dist_dropoff_longitude}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Estadística & Valor \\
+\midrule
+Mínimo & -121.933 \\
+Máximo & -61.3355 \\
+Media & -73.9734 \\
+Desviación típica & 0.0706433 \\
+Asimetría & -425.332 \\
+Curtosis & 292\,526 \\
+Valores distintos & 33\,821 \\
+\bottomrule
+\end{tabular}
+\caption{Estadísticas del atributo \texttt{dropoff\_longitude}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/hist_dropoff_longitude.png}
+\caption{Histograma del atributo \texttt{hist\_dropoff\_longitude}.}
+\label{fig:hist_dropoff_longitude}
+\end{figure}
+
 \subsubsection*{9. dropoff\_latitude}
 Atributo numérico continuo que registra la latitud del destino. Presenta asimetría en sus valores mínimos y máximos absolutos ocasionada por interferencias en la señal satelital de los taxis, requiriendo el mismo tratamiento de recorte perimetral que las métricas de origen.
+
+\begin{table}[H]
+\centering
+\label{tab:dist_dropoff_latitude}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Estadística & Valor \\
+\midrule
+Mínimo & 32.1811 \\
+Máximo & 43.921 \\
+Media & 40.7518 \\
+Desviación típica & 0.0358906 \\
+Asimetría & -20.6712 \\
+Curtosis & 4\,259.54 \\
+Valores distintos & 62\,519 \\
+\bottomrule
+\end{tabular}
+\caption{Estadísticas del atributo \texttt{dropoff\_latitude}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/hist_dropoff_latitude.png}
+\caption{Histograma del atributo \texttt{hist\_dropoff\_latitude}.}
+\label{fig:hist_dropoff_latitude}
+\end{figure}
 
 \subsubsection*{10. store\_and\_fwd\_flag}
 Indicador booleano nominal (\texttt{Y}/\texttt{N}) que refleja si el registro del viaje tuvo que almacenarse temporalmente en la memoria del vehículo antes de enviarse al servidor debido a pérdidas de conexión. Su moda recae abrumadoramente en el valor \texttt{N}. El análisis exploratorio confirma que no aporta información predictiva sobre la duración del viaje.
 
+\begin{table}[H]
+\centering
+\label{tab:dist_store_and_fwd_flag}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lrr}
+\toprule
+Valor & Frecuencia & Porcentaje (\%) \\
+\midrule
+N & 1450599 & 99.45 \\
+Y & 8045 & 0.55 \\
+\bottomrule
+\end{tabular}
+\caption{Distribución de frecuencias del atributo \texttt{store\_and\_fwd\_flag}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/barras_store_and_fwd_flag.png}
+\caption{Diagrama de barras para el atributo \texttt{store\_and\_fwd\_flag}.}
+\label{fig:barras_store_and_fwd_flag.png}
+\end{figure}
+
 \subsubsection*{11. trip\_duration}
 Atributo numérico continuo que mide el tiempo total del viaje en segundos. Es el origen de la variable objetivo del modelo. Muestra una asimetría muy pronunciada hacia la derecha y una curtosis extremadamente elevada. Esto corrobora la existencia de anomalías severas consistentes en viajes residuales de 1 segundo (cancelaciones) y \textit{outliers} máximos de varias horas o días (taxímetros bloqueados).
+
+\begin{table}[H]
+\centering
+\label{tab:dist_trip_duration}
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lr}
+\toprule
+Estadística & Valor \\
+\midrule
+Mínimo & 1 \\
+Máximo & 3\,526\,280 \\
+Media & 959.492 \\
+Desviación típica & 5\,237.43 \\
+Asimetría & 343.164 \\
+Curtosis & 192\,132 \\
+Valores distintos & 7\,417 \\
+\bottomrule
+\end{tabular}
+\caption{Estadísticas del atributo \texttt{trip\_duration}.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{diagramas/hist_trip_duration.png}
+\caption{Histrograma del atributo \texttt{hist\_trip\_duration}.}
+\label{fig:hist_trip_duration}
+\end{figure}
 
 \subsection{Examinación de correlaciones}
 El análisis exploratorio revela dependencias clave que guían la ingeniería de atributos:
