@@ -114,27 +114,34 @@ println("\nPaso 5: limpieza (misma función para train y test)")
 
 // Distancia haversine en km entre dos puntos (lat/lon en grados)
 def distanceKm(lat1: Column, lon1: Column, lat2: Column, lon2: Column): Column = {
-  //mide lo separados que están los dos puntos sobre una esfera
+  // mide lo separados que están los dos puntos sobre una esfera
   val a = pow(sin(radians(lat2 - lat1) / 2), 2) +
           cos(radians(lat1)) * cos(radians(lat2)) *
           pow(sin(radians(lon2 - lon1) / 2), 2)
-   // pasa el valor a kilómetros
+  // pasa el valor a kilómetros
   lit(2 * 6371.0) * asin(sqrt(a))
 }
 
-// se limpian las las filas quedandonos solo con als valida (las que cumplen ciertos requisitos)
+// Criterios de limpieza, definidos una sola vez: los usan clean() y el desglose de NTAIE / NTOE
+val dist = distanceKm(col("pickup_latitude"), col("pickup_longitude"),
+                      col("dropoff_latitude"), col("dropoff_longitude"))
+
+// Una fila es inconsistente (NTAIE) si cumple alguna de estas condiciones
+val inconsistent = (
+  !col("passenger_count").between(1, 6) ||
+  !col("pickup_latitude").between(40.0, 41.5) ||
+  !col("dropoff_latitude").between(40.0, 41.5) ||
+  !col("pickup_longitude").between(-74.8, -73.0) ||
+  !col("dropoff_longitude").between(-74.8, -73.0) ||
+  (dist === 0.0 && col("trip_duration") > 300)
+)
+
+// Una fila es outlier de duración (NTOE) si dura menos de 60 s o más de 3 h (10800 s)
+val outlier = !col("trip_duration").between(60, 10800)
+
+// Se queda solo con las filas válidas (las que no son inconsistentes ni outliers)
 def clean(df: DataFrame): DataFrame = {
-  val dist = distanceKm(col("pickup_latitude"), col("pickup_longitude"),
-                        col("dropoff_latitude"), col("dropoff_longitude"))
-  df.filter(
-    col("passenger_count").between(1, 6) &&
-    col("trip_duration").between(60, 10800) &&
-    col("pickup_latitude").between(40.0, 41.5) &&
-    col("dropoff_latitude").between(40.0, 41.5) &&
-    col("pickup_longitude").between(-74.8, -73.0) &&
-    col("dropoff_longitude").between(-74.8, -73.0) &&
-    !(dist === 0.0 && col("trip_duration") > 300)
-  )
+  df.filter(!inconsistent && !outlier)
 }
 
 val trainClean = clean(train).cache()
@@ -152,20 +159,12 @@ val unclassified = nTest - nTestClean   // NTAIE + NTOE
 //  - NTOE: filas eliminadas solo por duración (< 60 s o > 3 h)
 //  - Si una fila cumple criterios de las dos causas, cuenta en NTAIE (así no se cuenta dos veces)
 //  - NTAIE + NTOE = unclassified, y la tasa de no clasificados es unclassified / nTest
-val dist = distanceKm(col("pickup_latitude"), col("pickup_longitude"),
-                      col("dropoff_latitude"), col("dropoff_longitude"))
-
-val inconsistent = (
-  !col("passenger_count").between(1, 6) ||
-  !col("pickup_latitude").between(40.0, 41.5) ||
-  !col("dropoff_latitude").between(40.0, 41.5) ||
-  !col("pickup_longitude").between(-74.8, -73.0) ||
-  !col("dropoff_longitude").between(-74.8, -73.0) ||
-  (dist === 0.0 && col("trip_duration") > 300)
-)
 val ntaie = test.filter(inconsistent).count()
-val ntoe  = nTest - nTestClean - ntaie   // lo que falta para llegar a la suma
+val ntoe  = test.filter(!inconsistent && outlier).count()   // si cumple las dos causas, ya está en NTAIE
 println(s"NTAIE = $ntaie  NTOE = $ntoe  (suma = ${ntaie + ntoe})")
+// Comprobación: los dos grupos tienen que sumar exactamente las filas eliminadas en test
+if (ntaie + ntoe != unclassified)
+  println(s"NTAIE + NTOE (${ntaie + ntoe}) no coincide con las filas eliminadas ($unclassified)")
 
 //Fin desglose
 
@@ -183,7 +182,7 @@ testClean.groupBy("trip_class").count().
 //  - Se eliminan: id (identificador), dropoff_datetime (fuga de información),
 //    vendor_id (reparto de clases casi igual al global), trip_duration (solo
 //    servía para crear la clase) y pickup_datetime (ya extraída hora y día)
-//   - pickup_longitude/latitude y dropoff_* se mantienen como candidatas
+//  - pickup_longitude/latitude y dropoff_* se mantienen como candidatas
 //  - El mes se descarta: el dataset solo cubre 6 meses y no generaliza
 
 println("\nPaso 6: construcción y selección de atributos")
@@ -240,14 +239,14 @@ val assembler = new VectorAssembler().
 
 // Aplica las mismas transformaciones (ya ajustadas con train) a cualquier DataFrame
 // y deja solo las dos columnas que necesita el clasificador: features y label
-def transform_pipeline(df: DataFrame): DataFrame = {
+def transformPipeline(df: DataFrame): DataFrame = {
   val withFlag  = flagIndexer.transform(df)
   val withLabel = labelIndexer.transform(withFlag)
   assembler.transform(withLabel).select("features", "label")
 }
 
-val trainFinal = transform_pipeline(trainSel)
-val testFinal  = transform_pipeline(testSel)
+val trainFinal = transformPipeline(trainSel)
+val testFinal  = transformPipeline(testSel)
 
 println("Primeras 5 filas de train transformado:")
 trainFinal.show(5, truncate = false)
@@ -260,4 +259,3 @@ flagIndexer.labelsArray(0).zipWithIndex.foreach { case (c, i) => println(s"  $c 
 // Opcional: guardar los conjuntos transformados (parquet, porque features es un vector)
 //trainFinal.write.mode("overwrite").parquet("output/train")
 //testFinal.write.mode("overwrite").parquet("output/test")
-
