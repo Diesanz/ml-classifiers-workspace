@@ -5,12 +5,12 @@ import org.apache.spark.sql.types.{StructType, StructField, StringType,
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 
 // Ruta completa al fichero (cambiar en base a donde se tenga el .csv)
-val PATH = "./train.csv"
+var PATH = "./train.csv"
 
 // Paso 1: cargar el dataset
 println("Paso 1: cargando el dataset")
 
-// Esquema deñ dataset: evita que Spark lea el fichero para inferir los tipos
+// Esquema del dataset: evita que Spark lea el fichero para inferir los tipos
 val taxiSchema = StructType(Array(
   StructField("id", StringType, true),
   StructField("vendor_id", IntegerType, true),
@@ -40,7 +40,7 @@ rawTaxiDF.show(5, truncate = false)
 
 
 // Paso 2: eliminar registros vacíos (algún nulo) y no validos
-println("\nPaso 2: eliminando registros vacíos y no válidos (p.ejem datos nulos y duplicados)")
+println("\nPaso 2: eliminando registros vacíos y no válidos (nulos y duplicados)")
 
 val taxiDF = rawTaxiDF.na.drop().dropDuplicates().cache()
 println(s"Registros vacíos o no validos eliminados: ${rawTaxiDF.count() - taxiDF.count()}")   // esperado: 0
@@ -146,7 +146,12 @@ val nTestClean  = testClean.count()
 val removedTrain = nTrain - nTrainClean
 val unclassified = nTest - nTestClean   // NTAIE + NTOE
 
-//Calcular desglose de NTAIE y NTOE
+// Desglose de NTAIE y NTOE en test (el enunciado pide contar cada causa)
+//  - NTAIE: filas eliminadas por inconsistentes (pasajeros fuera de 1-6, coordenadas
+//    fuera del rectángulo amplio o 0 km con duración > 5 min)
+//  - NTOE: filas eliminadas solo por duración (< 60 s o > 3 h)
+//  - Si una fila cumple criterios de las dos causas, cuenta en NTAIE (así no se cuenta dos veces)
+//  - NTAIE + NTOE = unclassified, y la tasa de no clasificados es unclassified / nTest
 val dist = distanceKm(col("pickup_latitude"), col("pickup_longitude"),
                       col("dropoff_latitude"), col("dropoff_longitude"))
 
