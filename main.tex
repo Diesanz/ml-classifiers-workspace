@@ -151,6 +151,8 @@
 \section{Introducción}
 Este trabajo recoge la primera etapa de un proyecto de clasificación con Spark: exploración y preparación de los datos. El conjunto elegido es el de la competición de Kaggle \textit{New York City Taxi Trip Duration}, y el problema es clasificar cada viaje como \textit{short}, \textit{medium} o \textit{long} según su duración. La memoria describe el problema y los datos, documenta los problemas detectados y explica cómo se obtienen los conjuntos de entrenamiento y prueba listos para un clasificador.
 
+La sección~\ref{sec:exploracion} explora los datos y documenta sus problemas, la~\ref{sec:preparacion} describe la preparación (partición, limpieza, selección y transformación) y la~\ref{sec:conclusiones} recoge las conclusiones.
+
 \newpage
 \section{Resumen Ejecutivo del Conjunto de Datos}
 \begin{itemize}
@@ -168,7 +170,7 @@ Este trabajo recoge la primera etapa de un proyecto de clasificación con Spark:
 \end{itemize}
 
 \newpage
-\section{Exploración de Datos}
+\section{Exploración de Datos}\label{sec:exploracion}
 
 \subsection{Descripción del problema}
 
@@ -182,9 +184,7 @@ a partir de \texttt{trip\_duration} (en segundos) definimos tres clases,
 al cliente de cuánto tardará su trayecto o para organizar mejor la flota.
 
 Los datos son viajes de taxis amarillos de 2016 publicados por la TLC de Nueva
-York. Kaggle los muestreó y depuró para la competición \textit{New York City Taxi
-Trip Duration}, un reto abierto pensado para compartir código y datos y aprender
-entre todos. Los viajes del conjunto de entrenamiento se extienden entre el 1 de
+York. Los viajes del conjunto de entrenamiento se extienden entre el 1 de
 enero y el 30 de junio de 2016, mientras que la competición se celebró entre
 julio y septiembre de 2017.
 
@@ -198,10 +198,10 @@ reto ECML/PKDD 2015~\cite{lam2015}. Nuestro enfoque es distinto: en lugar de
 predecir la duración exacta, solo queremos saber si el viaje será corto, medio o
 largo.
 
-\subsection{Descripción del conjunto de datos}
+\subsection{Descripción del conjunto de datos}\label{subsec:datos}
 
 \subsubsection{Definición de los atributos}
-El conjunto \texttt{train.csv} cuenta con 1\,458\,644 registros y describe cada viaje con los 11 atributos de la tabla~\ref{tab:definiciones}. Las definiciones proceden de la documentación de la competición de Kaggle.
+El conjunto \texttt{train.csv} describe cada viaje con los 11 atributos de la tabla~\ref{tab:definiciones}. Las definiciones proceden de la documentación de la competición de Kaggle.
 
 \begin{table}[H]
 \centering
@@ -243,8 +243,8 @@ El conjunto contiene \textbf{1\,458\,644 registros} y \textbf{11 atributos origi
 \midrule
 \texttt{id} & Nominal (identificador) & 1\,458\,644 \\
 \texttt{vendor\_id} & Nominal & 2 \\
-\texttt{pickup\_datetime} & Nominal (marca temporal) & -- \\
-\texttt{dropoff\_datetime} & Nominal (marca temporal) & -- \\
+\texttt{pickup\_datetime} & Nominal (marca temporal) & 1\,380\,222 \\
+\texttt{dropoff\_datetime} & Nominal (marca temporal) & 1\,380\,377 \\
 \texttt{passenger\_count} & Numérico discreto & 10 \\
 \texttt{pickup\_longitude} & Numérico continuo & 23\,047 \\
 \texttt{pickup\_latitude} & Numérico continuo & 45\,245 \\
@@ -263,11 +263,8 @@ El conjunto contiene \textbf{1\,458\,644 registros} y \textbf{11 atributos origi
     \item \textbf{Duplicados.} No hay ningún \texttt{id} repetido (los 1\,458\,644 valores son distintos) ni filas completas duplicadas.
 \end{itemize}
 
-
-
-
 \subsubsection{La clase}
-La clase \texttt{trip\_class} es una variable nominal que no viene en el fichero original: se construye a partir de \texttt{trip\_duration} con los cortes del enunciado. Sus valores posibles son tres: \textit{short} (duración de 10 minutos o menos), \textit{medium} (más de 10 y hasta 25 minutos, ambos incluidos en el extremo superior) y \textit{long} (más de 25 minutos). No tiene valores ausentes, porque se calcula para todos los registros.
+La clase \texttt{trip\_class} es una variable nominal que no viene en el fichero original: se construye a partir de \texttt{trip\_duration} con los cortes del enunciado. Sus valores posibles son tres: \textit{short} (duración de 10 minutos o menos), \textit{medium} (más de 10 y hasta 25 minutos, el 25 incluido) y \textit{long} (más de 25 minutos). No tiene valores ausentes, porque se calcula para todos los registros.
 
 \begin{table}[H]
 \centering
@@ -288,15 +285,15 @@ La clase \texttt{trip\_class} es una variable nominal que no viene en el fichero
 \label{tab:clase}
 \end{table}
 
-La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} están casi equilibradas, pero \textit{long} es una minoría clara: es unas 3,6 veces menos frecuente que \textit{short}, lo que supone un desbalanceo. 
+La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} están casi equilibradas, pero \textit{long} es una minoría clara: es unas 3,6 veces menos frecuente que \textit{short}, lo que supone un desbalanceo.
 
 \subsubsection{Los atributos uno a uno}
 
-\paragraph{\texttt{id}.} Identificador nominal con un valor distinto por viaje (1\,458\,644 valores, con la forma \texttt{id2875421}). No tiene ausentes ni moda, y al ser único no puede servir para predecir.
+\paragraph{\texttt{id}.} Identificador nominal con un valor distinto por viaje (con la forma \texttt{id2875421}). Al ser único, no tiene moda y no puede servir para predecir.
 
-\paragraph{\texttt{vendor\_id}.} Nominal con dos valores posibles, 1 y 2, que identifican al proveedor del registro. No tiene ausentes y su \textbf{moda} es 2.
+\paragraph{\texttt{vendor\_id}.} Nominal con dos valores posibles, 1 y 2, que identifican al proveedor del registro. Su \textbf{moda} es 2.
 
-\paragraph{\texttt{store\_and\_fwd\_flag}.} Booleano con valores \texttt{N} y \texttt{Y}. No tiene ausentes y su \textbf{moda} es \texttt{N}, con el 99,45\,\% de los viajes. Solo 8\,045 viajes (0,55\,\%) se guardaron en el vehículo antes de enviarse. La tabla~\ref{tab:vendor_flag} recoge las frecuencias de ambos atributos; sus diagramas de barras están en el apéndice.
+\paragraph{\texttt{store\_and\_fwd\_flag}.} Booleano con valores \texttt{N} y \texttt{Y}. Su \textbf{moda} es \texttt{N}; solo una pequeña minoría de viajes (0,55\,\%) se guardó en el vehículo antes de enviarse. La tabla~\ref{tab:vendor_flag} recoge las frecuencias de ambos atributos.
 
 \begin{table}[H]
 \centering
@@ -316,7 +313,7 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 \label{tab:vendor_flag}
 \end{table}
 
-\paragraph{\texttt{passenger\_count}.} Numérico discreto que introduce el conductor. Toma valores \textbf{de 0 a 9}, pero el rango habitual para un taxi es de 1 a 6. No tiene ausentes y su \textbf{moda} es 1 (70,86\,\%). Hay 60 viajes con 0 pasajeros y 5 con más de 6 (3 con 7, 1 con 8 y 1 con 9), como se ve en la tabla~\ref{tab:passenger} y en la figura~\ref{fig:passenger}, que usa escala logarítmica para que la cola sea visible. Los viajes con 0 pasajeros se consideran \textbf{imposibles}, porque un servicio de taxi sin pasajeros no tiene sentido. Los de 7 a 9 pasajeros no son imposibles, pero son \textbf{valores poco habituales} y apenas aparecen (5 viajes en total, menos del 0,001\,\% del conjunto), de modo que aportan muy poca información al modelo.
+\paragraph{\texttt{passenger\_count}.} Numérico discreto que introduce el conductor. Toma valores \textbf{de 0 a 9}, pero lo habitual en un taxi en New York es llevar de 1 a 6 pasajeros. Su \textbf{moda} es 1 (70,86\,\%). Hay 60 viajes con 0 pasajeros y 5 con más de 6 (3 con 7, 1 con 8 y 1 con 9), como se ve en la tabla~\ref{tab:passenger} y en la figura~\ref{fig:passenger}, que usa escala logarítmica para que la cola sea visible. Los viajes con 0 pasajeros se consideran \textbf{imposibles}, porque un servicio de taxi sin pasajeros no tiene sentido. Los de 7 a 9 pasajeros no son imposibles, pero son \textbf{valores poco habituales} y apenas aparecen (5 viajes en total, menos del 0,001\,\% del conjunto), de modo que aportan muy poca información al modelo.
 
 \begin{table}[H]
 \centering
@@ -349,7 +346,7 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 \label{fig:passenger}
 \end{figure}
 
-\paragraph{Fechas.} \texttt{pickup\_datetime} va \textbf{del 2016-01-01 00:00:17 al 2016-06-30 23:59:39} y \texttt{dropoff\_datetime} \textbf{del 2016-01-01 00:03:31 al 2016-07-01 23:02:03}. Ninguna tiene ausentes. Los viajes cubren seis meses, y el último destino cae el 1 de julio porque algunos viajes del bloque de unas 24 h empezaron el 30 de junio. La figura~\ref{fig:temporal} muestra el volumen de viajes: es parecido entre meses (de 229\,707 en enero a 256\,189 en marzo), el mínimo semanal es el lunes y el máximo el viernes y el sábado, y por hora hay un mínimo hacia las 5 h y un máximo a las 18--19 h.
+\paragraph{Fechas.} \texttt{pickup\_datetime} va \textbf{del 2016-01-01 00:00:17 al 2016-06-30 23:59:39} y \texttt{dropoff\_datetime} \textbf{del 2016-01-01 00:03:31 al 2016-07-01 23:02:03}. Los viajes cubren seis meses, y el último destino cae el 1 de julio porque algunos viajes de unas 24 h (sección~\ref{subsubsec:problemas}) empezaron el 30 de junio. La figura~\ref{fig:temporal} muestra el volumen de viajes: es parecido entre meses (de 229\,707 en enero a 256\,189 en marzo), el mínimo semanal es el lunes y el máximo el viernes y el sábado, y por hora hay un mínimo hacia las 5 h y un máximo a las 18--19 h.
 
 \begin{figure}[H]
 \centering
@@ -358,8 +355,7 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 \label{fig:temporal}
 \end{figure}
 
-
-\paragraph{Coordenadas y duración.} La tabla~\ref{tab:numericos} resume los cinco atributos numéricos continuos. Ninguno tiene ausentes.
+\paragraph{Coordenadas y duración.} La tabla~\ref{tab:numericos} resume los cinco atributos numéricos continuos.
 
 \begin{table}[H]
 \centering
@@ -380,7 +376,7 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 \label{tab:numericos}
 \end{table}
 
-\textbf{Coordenadas.} Media y mediana coinciden con el centro de Nueva York (longitud $\approx -74$, latitud $\approx 40{,}75$), con una desviación muy pequeña. Sin embargo, el rango llega a longitudes de $-121{,}93$ (costa oeste de EE.\,UU.) y latitudes de 51,88. Con un rectángulo ajustado a la ciudad (latitud 40,477--40,917; longitud $-74{,}256$ a $-73{,}7$) quedan fuera 305 recogidas y 1\,329 destinos. De estos destinos, 46 quedan fuera incluso de un rectángulo amplio (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$). La figura~\ref{fig:coord} muestra que casi todos los puntos están en un pico estrecho y los valores imposibles son aislados. Los histogramas de las otras tres coordenadas se comportan igual y están en el apéndice.
+\textbf{Coordenadas.} Media y mediana coinciden con el centro de Nueva York (longitud $\approx -74$, latitud $\approx 40{,}75$), con una desviación muy pequeña, pero el rango llega a longitudes de $-121{,}93$ (costa oeste de EE.\,UU.) y latitudes de 51,88. La figura~\ref{fig:coord} muestra que casi todos los puntos están en un pico estrecho y los valores imposibles son aislados (se cuantifican en la sección~\ref{subsubsec:problemas}). Las otras tres coordenadas se comportan igual.
 
 \begin{figure}[H]
 \centering
@@ -389,16 +385,35 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 \label{fig:coord}
 \end{figure}
 
-Para ver dónde se concentran las recogidas, la figura~\ref{fig:mapa} representa una muestra de puntos sobre la zona de Nueva York. Se distingue Manhattan como núcleo denso y dos agrupaciones aisladas que coinciden con la posición de los aeropuertos de LaGuardia y JFK. Esto sugiere que la zona de recogida puede aportar información sobre la duración, ya que los viajes desde o hacia los aeropuertos suelen ser más largos.
+Para ver dónde se concentran las recogidas, la figura~\ref{fig:mapa} representa todos los puntos de recogida sobre la zona de Nueva York. Se distingue Manhattan como núcleo denso y dos agrupaciones aisladas que coinciden con la posición de los aeropuertos de LaGuardia y JFK.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.75\textwidth]{diagramas/mapa_recogidas.png}
-\caption{Puntos de recogida (muestra) con el centro de Nueva York y los aeropuertos de LaGuardia y JFK como referencia. Los ejes se limitan a la zona de la ciudad, por lo que los valores fuera de ella no aparecen.}
+\caption{Puntos de recogida (todos los viajes) con el centro de Nueva York y los aeropuertos de LaGuardia y JFK como referencia. Los ejes se limitan a la zona de la ciudad, por lo que los valores fuera de ella no aparecen.}
 \label{fig:mapa}
 \end{figure}
 
-\textbf{Duración.} Va \textbf{de 1 s a 3\,526\,282 s} (unos 40,8 días). La media (959 s) es mayor que la mediana (662 s) y la desviación (5\,237 s) es mucho mayor que la media: la distribución está muy sesgada por los extremos. El 1\,\% de los viajes dura 87 s o menos y el 99\,\% dura 3\,440 s o menos (unos 57 min), pero el percentil 99,9\,\% ya es de 85\,128 s (23,6 h). Hay 8\,595 viajes de menos de 60 s y 2\,112 de más de 3 h, de los cuales 1\,843 superan las 23 h. La figura~\ref{fig:duracion} lo muestra.
+\textbf{Duración.} Va \textbf{de 1 s a 3\,526\,282 s} (unos 40,8 días). La media (959 s) es mayor que la mediana (662 s) y la desviación (5\,237 s) es mucho mayor que la media: la distribución está muy sesgada por los extremos. La tabla~\ref{tab:percentiles} recoge varios percentiles: el 99\,\% de los viajes dura menos de 1 h, pero el percentil 99,9\,\% ya supera las 23 h. La figura~\ref{fig:duracion} lo muestra; los recuentos por umbral se detallan en la sección~\ref{subsubsec:problemas}.
+
+\begin{table}[H]
+\centering
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{rrr}
+\toprule
+\textbf{Percentil} & \textbf{Duración (s)} & \textbf{Equivalente} \\
+\midrule
+0,1\,\% & 7 & 7 s \\
+1\,\% & 87 & 1,5 min \\
+50\,\% (mediana) & 662 & 11 min \\
+99\,\% & 3\,440 & 57 min \\
+99,9\,\% & 85\,128 & 23,6 h \\
+\bottomrule
+\end{tabular}
+\caption{Percentiles de \texttt{trip\_duration}.}
+\label{tab:percentiles}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -407,18 +422,43 @@ Para ver dónde se concentran las recogidas, la figura~\ref{fig:mapa} representa
 \label{fig:duracion}
 \end{figure}
 
-\subsubsection{Inconsistencias, outliers y ruido}
+\subsubsection{Atributos derivados}\label{subsubsec:derivados}
+A partir de los atributos originales se pueden obtener otros que aporten información que los originales no dan por sí solos. Aquí solo se describe de dónde salen y por qué se plantean; su relación con la clase se estudia en la sección~\ref{subsec:correlaciones} y la decisión de usarlos, en la selección de atributos.
+
+\begin{table}[H]
+\centering
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{p{3.6cm} p{3.4cm} p{6.4cm}}
+\toprule
+\textbf{Atributo derivado} & \textbf{Se obtiene de} & \textbf{Por qué se plantea} \\
+\midrule
+\texttt{distance\_km} & Las cuatro coordenadas (Haversine) & Las coordenadas en bruto no expresan cuánto se recorre; la distancia sí. \\
+Hora de recogida (\texttt{pickup\_hour}) & \texttt{pickup\_datetime} & El \textit{timestamp} en bruto no es utilizable por un clasificador, y la hora puede reflejar el tráfico. \\
+Día de la semana (\texttt{pickup\_day}) & \texttt{pickup\_datetime} & Distingue días laborables de fin de semana. \\
+Mes & \texttt{pickup\_datetime} & Recoge posibles diferencias entre meses. \\
+\bottomrule
+\end{tabular}
+\caption{Atributos que se pueden derivar de los originales.}
+\label{tab:derivados}
+\end{table}
+
+\paragraph{Distancia.} Se calcula en línea recta entre recogida y destino con la fórmula de Haversine, que da la distancia entre dos puntos de una esfera a partir de sus latitudes y longitudes (radio terrestre de 6\,371 km). Es una aproximación: no sigue las calles, así que la distancia real recorrida es mayor. Además, el destino solo se conoce al final del viaje, por lo que usarla supone que se declara al inicio.
+
+\paragraph{Hora, día de la semana y mes.} Se extraen de \texttt{pickup\_datetime}, la fecha y hora de inicio. Se usa la de recogida y no la de destino, porque esta última no se conoce al empezar el viaje. El mes solo cubre seis meses (de enero a junio), por lo que cualquier tendencia entre meses no tiene por qué mantenerse en otras épocas del año.
+
+\subsubsection{Inconsistencias, outliers y ruido}\label{subsubsec:problemas}
 Aquí solo se documentan los problemas detectados; no se elimina nada. Las decisiones de limpieza se aplican en la preparación de datos.
 
-\paragraph{Duración y fechas.} \texttt{trip\_duration} coincide con \texttt{dropoff\_datetime} $-$ \texttt{pickup\_datetime} en los 1\,458\,644 registros. Por tanto, \texttt{dropoff\_datetime} revela la duración y la clase: es una \textbf{fuga de información}, y además no se conoce al iniciar el viaje. No hay duraciones menores o iguales a 0 s.
+\paragraph{Duración y fechas.} \texttt{trip\_duration} coincide con la diferencia entre \texttt{dropoff\_datetime} y \texttt{pickup\_datetime} en los 1\,458\,644 registros. Por tanto, \texttt{dropoff\_datetime} revela la duración y la clase: es una \textbf{fuga de información}, y además no se conoce al iniciar el viaje. No hay duraciones menores o iguales a 0 s.
 
-\paragraph{Duración.} La regla del IQR marcaría como atípico todo lo que supera unos 35 min, lo que incluiría viajes \textit{long} legítimos, por lo que no se usa. En su lugar se miran los recuentos por umbral. Hay 8\,595 viajes de menos de 60 s (0,589\,\%), sin un salto claro en la distribución, y 2\,112 de más de 3 h (0,145\,\%). De estos, 1\,843 superan las 23 h y forman el pico aislado a las 24 h del histograma de la figura~\ref{fig:duracion}. Entre 2 y 3 h hay solo unos 141 viajes, así que un corte en 3 h separa ese bloque de la cola normal. Como \textbf{hipótesis}, el bloque podría deberse a registros fallidos (por ejemplo, un taxímetro que no se apagó).
+\paragraph{Duración.} La regla del IQR marcaría como atípico todo lo que supera unos 35 min, lo que incluiría viajes \textit{long} legítimos, por lo que no se usa. En su lugar se miran los recuentos por umbral. Hay 8\,595 viajes de menos de 60 s (0,589\,\%), sin un salto claro en la distribución, y 2\,112 de más de 3 h (0,145\,\%). De estos, 1\,843 superan las 23 h y se concentran en la segunda barra del histograma de la figura~\ref{fig:duracion}, separada de la cola normal. Entre 2 y 3 h hay solo unos 141 viajes, así que un corte en 3 h separa ese bloque de la cola normal. Como \textbf{hipótesis}, el bloque podría deberse a registros fallidos (por ejemplo, un taxímetro que no se apagó).
 
-\paragraph{Coordenadas.} Con el rectángulo ajustado a la ciudad quedan fuera 305 recogidas y 1\,329 destinos. Salir de él no implica un error: 901 de esos destinos son \textit{long} (67,8\,\%) y pueden ser viajes reales a Newark o Long Island. Solo son claramente imposibles los que quedan fuera de un rectángulo amplio (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$), a cientos de kilómetros de la ciudad: entre los destinos, 46. Los límites son una elección propia y se aplican igual a recogida y destino.
+\paragraph{Coordenadas.} Para detectar coordenadas anómalas se usan dos rectángulos, cada uno con un propósito distinto. El primero es un \textbf{rectángulo ajustado a la ciudad} (latitud 40,477--40,917; longitud $-74{,}256$ a $-73{,}7$), que sirve solo de referencia para contar qué puntos quedan fuera de Nueva York: 305 recogidas y 1\,329 destinos. Salir de él no implica un error: 901 de esos destinos son \textit{long} (67,8\,\%) y pueden ser viajes reales a Newark o Long Island, por lo que no se usa para eliminar viajes. El segundo es un \textbf{rectángulo amplio} (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$), que sirve para decidir qué coordenadas son imposibles: lo que queda fuera está a cientos de kilómetros de la ciudad (en los datos llega a longitud $-121{,}93$ y latitud 51,88), así que un taxi de Nueva York no podría estar ahí. Quedan fuera 35 recogidas y 46 destinos, 81 viajes en total, que no pertenecen a una clase concreta (los destinos son 23 \textit{short}, 15 \textit{medium} y 8 \textit{long}). Los límites del rectángulo amplio son una elección propia y se aplican igual a recogida y destino.
 
-\paragraph{Distancia.} Hay 5\,897 viajes de 0 km (0,40\,\%), con origen y destino idénticos. Es legítimo si el viaje es muy corto, pero sospechoso si dura mucho: 3\,191 duran más de 5 min (el más largo, casi 24 h), lo que contradice la distancia, el atributo que mejor separa las clases. La velocidad media supera los 100 km/h en 175 viajes, pero no se usa como criterio porque se calcula con \texttt{trip\_duration}, que define la clase.
+\paragraph{Distancia.} Hay 5\,897 viajes de 0 km (0,40\,\%), con origen y destino idénticos. Es legítimo si el viaje es muy corto, pero sospechoso si dura mucho: 3\,191 duran más de 5 min (el más largo, casi 24 h), lo que contradice la distancia, el atributo que mejor separa las clases (sección~\ref{subsec:correlaciones}). La velocidad media supera los 100 km/h en 175 viajes, pero no se usa como criterio porque se calcula con \texttt{trip\_duration}, que define la clase.
 
-\paragraph{Resumen.} Un mismo viaje puede cumplir varios criterios, así que las cifras \textbf{no se suman}; el total real sale del filtro combinado en la limpieza (sección~4.2).
+\paragraph{Resumen.} Un mismo viaje puede cumplir varios criterios, así que las cifras \textbf{no se suman}; el total real sale del filtro combinado en la limpieza (sección~\ref{subsec:limpieza}).
 
 \begin{table}[H]
 \centering
@@ -433,6 +473,7 @@ Duración $>$ 3 h & 2\,112 & 0,145 \\
 \texttt{passenger\_count} $=$ 0 o $>$ 6 & 65 & 0,004 \\
 Recogida fuera del rectángulo ajustado & 305 & 0,021 \\
 Destino fuera del rectángulo ajustado & 1\,329 & 0,091 \\
+Recogida o destino fuera del rectángulo amplio & 81 & 0,006 \\
 0 km y duración $>$ 5 min & 3\,191 & 0,219 \\
 \bottomrule
 \end{tabular}
@@ -440,32 +481,31 @@ Destino fuera del rectángulo ajustado & 1\,329 & 0,091 \\
 \label{tab:resumen}
 \end{table}
 
-\subsection{Examinación de correlaciones}
-Se estudian las relaciones entre atributos (posibles redundancias) y entre cada atributo y la clase (posible irrelevancia). Para ello se calculan, solo para explorar, la distancia en línea recta entre origen y destino (Haversine), la hora de recogida y el día de la semana.
+\subsection{Examinación de correlaciones}\label{subsec:correlaciones}
+Se estudian las relaciones entre atributos (posibles redundancias) y entre cada atributo y la clase (posible irrelevancia). Para ello se usan los atributos derivados de la sección~\ref{subsubsec:derivados} (distancia, hora, día de la semana y mes), calculados solo para explorar.
 
 \paragraph{Entre atributos.} Se usa la correlación de Spearman, porque la duración tiene valores extremos muy alejados del resto. En la figura~\ref{fig:correlacion}, la única relación clara de \texttt{trip\_duration} es con la distancia ($\rho = 0{,}79$); con el resto, $|\rho| \leq 0{,}12$. Las coordenadas tienen una redundancia moderada entre sí (máximo $\rho = 0{,}59$, longitud y latitud de recogida), sin llegar a ser fuerte. Pasajeros, hora y día no se relacionan con nada ($|\rho| \leq 0{,}06$), pero Spearman solo detecta relaciones monótonas, por lo que no basta para descartarlos.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{diagramas/matriz_correlacion.png}
+\includegraphics[width=1.0\textwidth]{diagramas/matriz_correlacion.png}
 \caption{Matriz de correlación de Spearman entre los atributos numéricos.}
 \label{fig:correlacion}
 \end{figure}
 
-
-\paragraph{Atributos y clase.} La \textbf{distancia} es el atributo que mejor separa las clases: su mediana crece de 1,25 km en \textit{short} a 2,93 en \textit{medium} y 8,74 en \textit{long}, y las cajas apenas se solapan (figura~\ref{fig:porclase}). Para el resto se compara el reparto de la clase dentro de cada valor:
+\paragraph{Atributos y clase.} La \textbf{distancia} es el atributo que mejor separa las clases: su mediana crece de 1,25 km en \textit{short} a 2,93 en \textit{medium} y 8,74 en \textit{long}, y las cajas apenas se solapan (figura~\ref{fig:porclase}). Para el resto se compara el reparto de la clase dentro de cada valor (el día de la semana va de 0 = lunes a 6 = domingo):
 \begin{itemize}
     \item \texttt{vendor\_id} reparte la clase casi igual que el global (diferencias de 0,7 puntos como máximo): aporta poco.
     \item \texttt{store\_and\_fwd\_flag}: con \texttt{Y}, \textit{long} es el 22,3\,\% frente al 12,3\,\% con \texttt{N}, aunque solo afecta al 0,55\,\% de los viajes.
     \item \texttt{passenger\_count}: de 1 a 6 pasajeros, \textit{long} varía entre 12,0 y 14,1\,\%: relación débil.
     \item \textbf{Hora}: \textit{long} pasa del 6,9\,\% a las 3 h al 17,1\,\% a las 15 h. La relación no es monótona, por eso Spearman no la veía.
-    \item \textbf{Día de la semana}: \textit{long} ronda el 11,5--14,7\,\% de lunes a jueves y baja al 9,9\,\% en fin de semana.
+    \item \textbf{Día de la semana}: \textit{long} ronda el 11,5--14,7\,\% entre semana y baja al 9,9\,\% en fin de semana.
     \item \textbf{Mes}: \textit{long} sube de 10,6\,\% (enero) a 14,5\,\% (junio), pero el conjunto solo cubre seis meses.
 \end{itemize}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.6\textwidth]{diagramas/boxplot_distancia_clase.png}
+\includegraphics[width=0.75\textwidth]{diagramas/boxplot_distancia_clase.png}
 \caption{Distancia (km, recortada a 30) por clase.}
 \label{fig:porclase}
 \end{figure}
@@ -474,12 +514,14 @@ Se estudian las relaciones entre atributos (posibles redundancias) y entre cada 
 \begin{itemize}
     \item \textbf{Redundantes o irrelevantes:} \texttt{id} y \texttt{vendor\_id}; con relación débil, \texttt{passenger\_count}; las coordenadas, de redundancia moderada.
     \item \textbf{No utilizables:} \texttt{dropoff\_datetime} (fuga de información) y \texttt{trip\_duration} (solo construye la clase).
-    \item \textbf{Atributos a construir:} la distancia, y la hora y el día extraídos de \texttt{pickup\_datetime}. Una variable de zona (aeropuertos) podría aportar, a la vista del mapa de recogidas.
-    \item \textbf{Selección:} la distancia será el atributo principal; la decisión sobre el resto se razona en la preparación de datos.
+    \item \textbf{A construir:} la distancia, y la hora y el día extraídos de \texttt{pickup\_datetime}.
+    \item \textbf{A seleccionar:} la distancia será el atributo principal; el resto se decide en la preparación de datos.
 \end{itemize}
 
 \newpage
-\section{Preparación de datos}
+\section{Preparación de datos}\label{sec:preparacion}
+
+El preprocesado se implementa en un único script de Scala que se ejecuta con \texttt{:load} y sigue este orden: cargar los datos y eliminar vacíos y duplicados, construir la clase, partir en entrenamiento y prueba, limpiar ambos conjuntos con la misma función, construir y seleccionar atributos, y transformarlos en \texttt{features} y \texttt{label}. Cada subsección describe una parte de este proceso.
 
 \subsection{Creación de conjuntos de entrenamiento y prueba}
 Primero se eliminan los registros vacíos y duplicados (ninguno, como se vio en la exploración) y se construye la clase \texttt{trip\_class}. Después, antes de cualquier otra modificación, se parte el conjunto en un 80\,\% para entrenamiento y un 20\,\% para prueba con \texttt{randomSplit} y semilla fija (\texttt{seed = 42}), para que la partición sea reproducible. El conjunto de prueba no interviene en ningún ajuste: los \textit{estimators} se entrenan solo con entrenamiento y se aplican después a prueba.
@@ -503,14 +545,14 @@ Prueba & 291\,789 & 44,63 & 42,98 & 12,38 \\
 
 La partición aleatoria conserva el reparto de la clase (diferencias de décimas de punto), por lo que, con este volumen de datos, no se necesita un muestreo estratificado.
 
-\subsection{Limpieza de datos}
-La limpieza se programa como una única función que se aplica igual a entrenamiento y a prueba. Elimina los registros que cumplen alguno de estos criterios, justificados en la exploración:
+\subsection{Limpieza de datos}\label{subsec:limpieza}
+La limpieza se programa como una única función que se aplica igual a entrenamiento y a prueba. Siguiendo el enunciado, las filas eliminadas en prueba se cuentan en dos grupos: \textbf{NTAIE} (número total de ausentes o inconsistentes eliminados) y \textbf{NTOE} (número total de outliers eliminados). Se eliminan los registros que cumplen alguno de estos criterios, justificados en la exploración:
 
 \begin{itemize}
     \item \textbf{Inconsistentes (NTAIE):}
     \begin{itemize}
         \item \texttt{passenger\_count} fuera de 1--6: los 0 pasajeros son imposibles y los de 7 a 9 son casi inexistentes.
-        \item Recogida o destino fuera del rectángulo amplio (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$). El rectángulo ajustado a la ciudad no se usa, para no eliminar viajes reales a Newark o Long Island.
+       \item Recogida o destino fuera del rectángulo amplio (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$), definido en la exploración como el límite de lo físicamente imposible: 81 viajes. El rectángulo ajustado a la ciudad no se usa para eliminar, para no perder viajes reales a Newark o Long Island.
         \item Distancia de 0 km con duración superior a 5 min, porque contradice la distancia. Los 0 km de 5 min o menos se mantienen.
     \end{itemize}
     \item \textbf{Outliers de duración (NTOE):}
@@ -549,7 +591,7 @@ Para cumplir el requisito, la tasa de error del clasificador deberá ser como m�
 Filtrar por duración es filtrar por la etiqueta, así que la tasa de error se medirá sobre datos limpios y no refleja del todo el caso real. Por eso se informa de la tasa de no clasificados.
 
 \subsection{Selección de atributos}
-Se parte de los 11 atributos originales y de la clase. Las decisiones se basan en la exploración (secciones 3.2 y 3.3) y se aplican igual a entrenamiento y a prueba.
+Se parte de los 11 atributos originales y de la clase. Las decisiones se basan en la exploración (secciones~\ref{subsec:datos} y~\ref{subsec:correlaciones}) y se aplican igual a entrenamiento y a prueba.
 
 \begin{table}[H]
 \centering
@@ -570,14 +612,14 @@ Se parte de los 11 atributos originales y de la clase. Las decisiones se basan e
 Mes & Descartar & Solo hay seis meses de datos: la tendencia observada no se generaliza a otras épocas del año. \\
 \texttt{passenger\_count} & Mantener & Relación débil con la clase, se conserva como candidato. \\
 \texttt{store\_and\_fwd\_flag} & Mantener & Con \texttt{Y}, \textit{long} es el 22,3\,\% frente al 12,3\,\%, aunque afecta al 0,55\,\% de los viajes. \\
-Cuatro coordenadas & Mantener & Spearman solo detecta relaciones monótonas; el mapa sugiere que la zona (aeropuertos) puede aportar. \\
+Cuatro coordenadas & Mantener & Spearman solo detecta relaciones monótonas, por lo que su correlación baja con la duración no basta para descartarlas. \\
 \bottomrule
 \end{tabular}
 \caption{Decisiones sobre los atributos.}
 \label{tab:seleccion}
 \end{table}
 
-Las coordenadas de destino solo se conocen al final del viaje. Usar \texttt{distance\_km} supone, por tanto, que el destino se declara al inicio. No se ha aplicado una selección supervisada automática; si en el entregable individual se hiciera, solo se ajustaría con entrenamiento.
+En Spark, \texttt{dayofweek} numera los días de 1 (domingo) a 7 (sábado), mientras que en la exploración se usó 0 para el lunes y 6 para el domingo; el cambio de numeración no afecta al modelo. Las coordenadas de destino solo se conocen al final del viaje, por lo que usar \texttt{distance\_km} supone que el destino se declara al inicio. No se ha aplicado una selección supervisada automática; si en el entregable individual se hiciera, solo se ajustaría con entrenamiento.
 
 \subsection{Transformación de datos}
 Para obtener las columnas \texttt{features} y \texttt{label} se usan dos \textit{estimators} y un \textit{transformer} de Spark ML:
@@ -591,12 +633,12 @@ Los dos \textit{estimators} se ajustan (\texttt{fit}) solo con entrenamiento y s
 No se escalan los atributos, porque el primer modelo previsto, un árbol de decisión, no es sensible a la escala. Si se usara un modelo que sí lo fuera, habría que normalizar.
 
 \newpage
-\section{Conclusiones}
+\section{Conclusiones}\label{sec:conclusiones}
 Los datos están completos (sin ausentes ni duplicados), pero tienen valores extremos en duración, coordenadas, pasajeros y distancia. La clase está moderadamente desbalanceada (\textit{long}, 12,37\,\%), por lo que además de la exactitud conviene evaluar con una métrica por clase, como la F1 macro.
 
 La distancia derivada es el atributo más informativo frente a las coordenadas en bruto, y la hora y el día de la semana muestran relación con la clase. \texttt{dropoff\_datetime} es una fuga de información y se elimina.
 
-La limpieza descarta el 0,95\,\% de entrenamiento y el 1,00\,\% de prueba (NTAIE = 663, NTOE = 2\,257). Como se filtra por duración, la tasa de error que se mida en el entregable individual será sobre datos limpios y deberá ser al menos diez veces mayor que la tasa de no clasificados. Además, \texttt{distance\_km} supone que el destino se conoce al inicio del viaje.
+La limpieza descarta el 0,94\,\% de entrenamiento y el 1,00\,\% de prueba (NTAIE = 663, NTOE = 2\,257). Como se filtra por duración, la tasa de error que se mida en el entregable individual será sobre datos limpios y deberá ser al menos diez veces mayor que la tasa de no clasificados. Además, \texttt{distance\_km} supone que el destino se conoce al inicio del viaje.
 
 \newpage
 \section{Carga de trabajo}
