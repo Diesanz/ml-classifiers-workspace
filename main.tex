@@ -171,6 +171,7 @@ La sección~\ref{sec:exploracion} explora los datos y documenta sus problemas, l
 
 \newpage
 \section{Exploración de Datos}\label{sec:exploracion}
+La exploración se ha realizado con \textit{notebooks} de Python (\textit{pandas}, \textit{matplotlib} y \textit{seaborn}) sin modificar los datos: \texttt{atributos.ipynb} describe cada atributo y \seqsplit{\texttt{exploracion-datos.ipynb}} cubre la clase, los problemas detectados, las correlaciones y las decisiones de limpieza. El script de Scala \texttt{exploracion-preparacionDatos.scala} realiza comprobaciones básicas sobre Spark (esquema, tamaño, ausentes, duplicados y distribución de la clase) y después realiza la partición, la limpieza, la selección y la transformación. Todo el código se entrega junto con la memoria.
 
 \subsection{Descripción del problema}
 
@@ -228,7 +229,7 @@ El conjunto \texttt{train.csv} describe cada viaje con los 11 atributos de la ta
 \label{tab:definiciones}
 \end{table}
 
-Conviene destacar que \texttt{passenger\_count} lo introduce el conductor, lo que explica que aparezcan valores poco razonables (0 o más de 6 pasajeros) que se analizan más adelante.
+Conviene destacar que \texttt{passenger\_count} lo introduce el conductor \cite{elemento_nyc_taxi}, lo que explica que aparezcan valores poco razonables (0 o más de 6 pasajeros) que se analizan más adelante.
 
 \subsubsection{Tamaño, tipos, ausentes y duplicados}
 El conjunto contiene \textbf{1\,458\,644 registros} y \textbf{11 atributos originales}. La tabla~\ref{tab:tipos} recoge la naturaleza de cada uno, con la misma clasificación que el resumen ejecutivo, y su número de valores distintos.
@@ -258,10 +259,9 @@ El conjunto contiene \textbf{1\,458\,644 registros} y \textbf{11 atributos origi
 \label{tab:tipos}
 \end{table}
 
-\begin{itemize}
-    \item \textbf{Valores ausentes y registros vacíos.} Ningún atributo tiene valores ausentes, y la clase, al construirse a partir de \texttt{trip\_duration}, tampoco. Por tanto no hay registros vacíos ni registros a los que les falte algún atributo o la clase.
-    \item \textbf{Duplicados.} No hay ningún \texttt{id} repetido (los 1\,458\,644 valores son distintos) ni filas completas duplicadas.
-\end{itemize}
+\textbf{Valores ausentes y registros vacíos.} Ningún atributo tiene valores ausentes, y la clase, al construirse a partir de \texttt{trip\_duration}, tampoco. Por tanto no hay registros vacíos ni registros a los que les falte algún atributo o la clase.
+
+\textbf{Duplicados.} No hay ningún \texttt{id} repetido (los 1\,458\,644 valores son distintos) ni filas completas duplicadas.
 
 \subsubsection{La clase}
 La clase \texttt{trip\_class} es una variable nominal que no viene en el fichero original: se construye a partir de \texttt{trip\_duration} con los cortes del enunciado. Sus valores posibles son tres: \textit{short} (duración de 10 minutos o menos), \textit{medium} (más de 10 y hasta 25 minutos, el 25 incluido) y \textit{long} (más de 25 minutos). No tiene valores ausentes, porque se calcula para todos los registros.
@@ -291,9 +291,25 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 
 \paragraph{\texttt{id}.} Identificador nominal con un valor distinto por viaje (con la forma \texttt{id2875421}). Al ser único, no tiene moda y no puede servir para predecir.
 
-\paragraph{\texttt{vendor\_id}.} Nominal con dos valores posibles, 1 y 2, que identifican al proveedor del registro. Su \textbf{moda} es 2.
+\paragraph{\texttt{vendor\_id}.} Nominal con dos valores posibles, 1 y 2, que identifican al proveedor del registro. Su moda es 2.
 
-\paragraph{\texttt{store\_and\_fwd\_flag}.} Booleano con valores \texttt{N} y \texttt{Y}. Su \textbf{moda} es \texttt{N}; solo una pequeña minoría de viajes (0,55\,\%) se guardó en el vehículo antes de enviarse. La tabla~\ref{tab:vendor_flag} recoge las frecuencias de ambos atributos.
+\begin{table}[H]
+\centering
+\small
+\rowcolors{2}{gray!8}{white}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Valor} & \textbf{Frecuencia} & \textbf{Porcentaje (\%)} \\
+\midrule
+1 & 678\,342 & 46,50 \\
+2 & 780\,302 & 53,49 \\
+\bottomrule
+\end{tabular}
+\caption{Distribución de frecuencias de \texttt{vendor\_id}.}
+\label{tab:vendor_id}
+\end{table}
+
+\paragraph{\texttt{store\_and\_fwd\_flag}.} Booleano con valores \texttt{N} y \texttt{Y}. Su moda es \texttt{N}; solo una pequeña minoría de viajes (0,55\,\%) se guardó en el vehículo antes de enviarse. La tabla~\ref{tab:vendor_flag} recoge las frecuencias de ambos atributos.
 
 \begin{table}[H]
 \centering
@@ -301,19 +317,17 @@ La \textbf{moda} es \textit{short}. Las clases \textit{short} y \textit{medium} 
 \rowcolors{2}{gray!8}{white}
 \begin{tabular}{llrr}
 \toprule
-\textbf{Atributo} & \textbf{Valor} & \textbf{Frecuencia} & \textbf{Porcentaje (\%)} \\
+\textbf{Valor} & \textbf{Frecuencia} & \textbf{Porcentaje (\%)} \\
 \midrule
-\texttt{vendor\_id} & 1 & 678\,342 & 46,50 \\
-\texttt{vendor\_id} & 2 & 780\,302 & 53,49 \\
-\texttt{store\_and\_fwd\_flag} & \texttt{N} & 1\,450\,599 & 99,45 \\
-\texttt{store\_and\_fwd\_flag} & \texttt{Y} & 8\,045 & 0,55 \\
+\texttt{N} & 1\,450\,599 & 99,45 \\
+\texttt{Y} & 8\,045 & 0,55 \\
 \bottomrule
 \end{tabular}
-\caption{Distribución de frecuencias de \texttt{vendor\_id} y \texttt{store\_and\_fwd\_flag}.}
-\label{tab:vendor_flag}
+\caption{Distribución de frecuencias de \texttt{store\_and\_fwd\_flag}.}
+\label{tab:store_flag}
 \end{table}
 
-\paragraph{\texttt{passenger\_count}.} Numérico discreto que introduce el conductor. Toma valores \textbf{de 0 a 9}, pero lo habitual en un taxi en New York es llevar de 1 a 6 pasajeros. Su \textbf{moda} es 1 (70,86\,\%). Hay 60 viajes con 0 pasajeros y 5 con más de 6 (3 con 7, 1 con 8 y 1 con 9), como se ve en la tabla~\ref{tab:passenger} y en la figura~\ref{fig:passenger}, que usa escala logarítmica para que la cola sea visible. Los viajes con 0 pasajeros se consideran \textbf{imposibles}, porque un servicio de taxi sin pasajeros no tiene sentido. Los de 7 a 9 pasajeros no son imposibles, pero son \textbf{valores poco habituales} y apenas aparecen (5 viajes en total, menos del 0,001\,\% del conjunto), de modo que aportan muy poca información al modelo.
+\paragraph{\texttt{passenger\_count}.} Numérico discreto que introduce el conductor. Toma valores de \textbf{0 a 9}, pero lo habitual en un taxi en New York es llevar de 1 a 6 pasajeros. Su moda es 1 (70,86\,\%). Hay 60 viajes con 0 pasajeros y 5 con más de 6 (3 con 7, 1 con 8 y 1 con 9), como se ve en la tabla~\ref{tab:passenger} y en la figura~\ref{fig:passenger}, que usa escala logarítmica para que la cola sea visible. Los viajes con 0 pasajeros se consideran imposibles, porque un servicio de taxi sin pasajeros no tiene sentido. Los de 7 a 9 pasajeros no son imposibles, pero son valores poco habituales y apenas aparecen (5 viajes en total, menos del 0,001\,\% del conjunto), de modo que aportan muy poca información al modelo.
 
 \begin{table}[H]
 \centering
@@ -394,7 +408,7 @@ Para ver dónde se concentran las recogidas, la figura~\ref{fig:mapa} representa
 \label{fig:mapa}
 \end{figure}
 
-\textbf{Duración.} Va \textbf{de 1 s a 3\,526\,282 s} (unos 40,8 días). La media (959 s) es mayor que la mediana (662 s) y la desviación (5\,237 s) es mucho mayor que la media: la distribución está muy sesgada por los extremos. La tabla~\ref{tab:percentiles} recoge varios percentiles: el 99\,\% de los viajes dura menos de 1 h, pero el percentil 99,9\,\% ya supera las 23 h. La figura~\ref{fig:duracion} lo muestra; los recuentos por umbral se detallan en la sección~\ref{subsubsec:problemas}.
+\textbf{Duración.} El atributo \texttt{trip\_duration} contiene valores \textbf{desde 1 s hasta 3\,526\,282 s} (unos 40,8 días). La media (959 s) es mayor que la mediana (662 s) y la desviación (5\,237 s) es mucho mayor que la media: la distribución está muy sesgada por los extremos. La tabla~\ref{tab:percentiles} recoge varios percentiles: el 99\,\% de los viajes dura menos de 1 h, pero el percentil 99,9\,\% ya supera las 23 h. La figura~\ref{fig:duracion} lo muestra; los recuentos por umbral se detallan en la sección~\ref{subsubsec:problemas}.
 
 \begin{table}[H]
 \centering
@@ -423,7 +437,7 @@ Para ver dónde se concentran las recogidas, la figura~\ref{fig:mapa} representa
 \end{figure}
 
 \subsubsection{Atributos derivados}\label{subsubsec:derivados}
-A partir de los atributos originales se pueden obtener otros que aporten información que los originales no dan por sí solos. Aquí solo se describe de dónde salen y por qué se plantean; su relación con la clase se estudia en la sección~\ref{subsec:correlaciones} y la decisión de usarlos, en la selección de atributos.
+A partir de los atributos originales se pueden obtener otros que aporten información que los originales no dan por sí solos. Aquí solo se describe de dónde salen y por qué se plantean. Su relación con la clase se estudia en la sección~\ref{subsec:correlaciones} y la decisión de usarlos, en la selección de atributos.
 
 \begin{table}[H]
 \centering
@@ -433,7 +447,7 @@ A partir de los atributos originales se pueden obtener otros que aporten informa
 \toprule
 \textbf{Atributo derivado} & \textbf{Se obtiene de} & \textbf{Por qué se plantea} \\
 \midrule
-\texttt{distance\_km} & Las cuatro coordenadas (Haversine) & Las coordenadas en bruto no expresan cuánto se recorre; la distancia sí. \\
+\texttt{distance\_km} & Las cuatro coordenadas (Haversine) & Las coordenadas en bruto no expresan cuánto se recorre, la distancia sí. \\
 Hora de recogida (\texttt{pickup\_hour}) & \texttt{pickup\_datetime} & El \textit{timestamp} en bruto no es utilizable por un clasificador, y la hora puede reflejar el tráfico. \\
 Día de la semana (\texttt{pickup\_day}) & \texttt{pickup\_datetime} & Distingue días laborables de fin de semana. \\
 Mes & \texttt{pickup\_datetime} & Recoge posibles diferencias entre meses. \\
@@ -450,11 +464,11 @@ Mes & \texttt{pickup\_datetime} & Recoge posibles diferencias entre meses. \\
 \subsubsection{Inconsistencias, outliers y ruido}\label{subsubsec:problemas}
 Aquí solo se documentan los problemas detectados; no se elimina nada. Las decisiones de limpieza se aplican en la preparación de datos.
 
-\paragraph{Duración y fechas.} \texttt{trip\_duration} coincide con la diferencia entre \texttt{dropoff\_datetime} y \texttt{pickup\_datetime} en los 1\,458\,644 registros. Por tanto, \texttt{dropoff\_datetime} revela la duración y la clase: es una \textbf{fuga de información}, y además no se conoce al iniciar el viaje. No hay duraciones menores o iguales a 0 s.
+\paragraph{Duración y fechas.} \texttt{trip\_duration} coincide con la diferencia entre \texttt{dropoff\_datetime} y \texttt{pickup\_datetime} en los 1\,458\,644  (todos los registros). Por tanto, \texttt{dropoff\_datetime} revela la duración y la clase: es una \textbf{fuga de información}, y además no se conoce al iniciar el viaje. No hay duraciones menores o iguales a 0 s.
 
 \paragraph{Duración.} La regla del IQR marcaría como atípico todo lo que supera unos 35 min, lo que incluiría viajes \textit{long} legítimos, por lo que no se usa. En su lugar se miran los recuentos por umbral. Hay 8\,595 viajes de menos de 60 s (0,589\,\%), sin un salto claro en la distribución, y 2\,112 de más de 3 h (0,145\,\%). De estos, 1\,843 superan las 23 h y se concentran en la segunda barra del histograma de la figura~\ref{fig:duracion}, separada de la cola normal. Entre 2 y 3 h hay solo unos 141 viajes, así que un corte en 3 h separa ese bloque de la cola normal. Como \textbf{hipótesis}, el bloque podría deberse a registros fallidos (por ejemplo, un taxímetro que no se apagó).
 
-\paragraph{Coordenadas.} Para detectar coordenadas anómalas se usan dos rectángulos, cada uno con un propósito distinto. El primero es un \textbf{rectángulo ajustado a la ciudad} (latitud 40,477--40,917; longitud $-74{,}256$ a $-73{,}7$), que sirve solo de referencia para contar qué puntos quedan fuera de Nueva York: 305 recogidas y 1\,329 destinos. Salir de él no implica un error: 901 de esos destinos son \textit{long} (67,8\,\%) y pueden ser viajes reales a Newark o Long Island, por lo que no se usa para eliminar viajes. El segundo es un \textbf{rectángulo amplio} (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$), que sirve para decidir qué coordenadas son imposibles: lo que queda fuera está a cientos de kilómetros de la ciudad (en los datos llega a longitud $-121{,}93$ y latitud 51,88), así que un taxi de Nueva York no podría estar ahí. Quedan fuera 35 recogidas y 46 destinos, 81 viajes en total, que no pertenecen a una clase concreta (los destinos son 23 \textit{short}, 15 \textit{medium} y 8 \textit{long}). Los límites del rectángulo amplio son una elección propia y se aplican igual a recogida y destino.
+\paragraph{Coordenadas.} Para detectar coordenadas anómalas se usan dos rectángulos, cada uno con un propósito distinto. El primero es un \textbf{rectángulo ajustado a la ciudad} (latitud 40,477--40,917; longitud $-74{,}256$ a $-73{,}7$), que sirve solo de referencia para contar qué puntos quedan fuera de Nueva York: 305 recogidas y 1\,329 destinos. Salir de él no implica un error ya que 901 de esos destinos son \textit{long} (67,8\,\%) y pueden ser viajes reales a Newark o Long Island, por lo que no se usa para eliminar viajes. El segundo es un \textbf{rectángulo amplio} (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$), que sirve para decidir qué coordenadas son imposibles ya que lo que queda fuera está a cientos de kilómetros de la ciudad (en los datos llega a longitud $-121{,}93$ y latitud 51,88), así que un taxi de Nueva York no podría estar ahí. Quedan fuera 35 recogidas y 46 destinos, 81 viajes en total, que no pertenecen a una clase concreta (los destinos son 23 \textit{short}, 15 \textit{medium} y 8 \textit{long}). Los límites del rectángulo amplio son una elección propia y se aplican igual a recogida y destino.
 
 \paragraph{Distancia.} Hay 5\,897 viajes de 0 km (0,40\,\%), con origen y destino idénticos. Es legítimo si el viaje es muy corto, pero sospechoso si dura mucho: 3\,191 duran más de 5 min (el más largo, casi 24 h), lo que contradice la distancia, el atributo que mejor separa las clases (sección~\ref{subsec:correlaciones}). La velocidad media supera los 100 km/h en 175 viajes, pero no se usa como criterio porque se calcula con \texttt{trip\_duration}, que define la clase.
 
@@ -521,7 +535,7 @@ Se estudian las relaciones entre atributos (posibles redundancias) y entre cada 
 \newpage
 \section{Preparación de datos}\label{sec:preparacion}
 
-El preprocesado se implementa en un único script de Scala que se ejecuta con \texttt{:load} y sigue este orden: cargar los datos y eliminar vacíos y duplicados, construir la clase, partir en entrenamiento y prueba, limpiar ambos conjuntos con la misma función, construir y seleccionar atributos, y transformarlos en \texttt{features} y \texttt{label}. Cada subsección describe una parte de este proceso.
+El preprocesado se implementa en el script de Scala \seqsplit{\texttt{exploracion-preparacionDatos.scala}}, que se ejecuta con \texttt{:load} cambiando solo la variable \texttt{PATH}. Sigue este orden: cargar los datos y eliminar vacíos y duplicados, construir la clase, partir en entrenamiento y prueba, limpiar ambos conjuntos con la misma función, construir y seleccionar atributos, y transformarlos en \texttt{features} y \texttt{label}. Cada subsección describe una parte de este proceso.
 
 \subsection{Creación de conjuntos de entrenamiento y prueba}
 Primero se eliminan los registros vacíos y duplicados (ninguno, como se vio en la exploración) y se construye la clase \texttt{trip\_class}. Después, antes de cualquier otra modificación, se parte el conjunto en un 80\,\% para entrenamiento y un 20\,\% para prueba con \texttt{randomSplit} y semilla fija (\texttt{seed = 42}), para que la partición sea reproducible. El conjunto de prueba no interviene en ningún ajuste: los \textit{estimators} se entrenan solo con entrenamiento y se aplican después a prueba.
@@ -642,23 +656,33 @@ La limpieza descarta el 0,94\,\% de entrenamiento y el 1,00\,\% de prueba (NTAIE
 
 \newpage
 \section{Carga de trabajo}
-\subsection{Problemas}
-% Lista los problemas reales que tuvisteis (por ejemplo, la sintaxis del punto en el REPL de Spark con :load).
+\subsection{Dificultades encontradas}
+Durante el desarrollo de esta primera etapa se abordaron los siguientes obstáculos principales:
+\begin{itemize}
+    \item \textbf{Curva de aprendizaje en Spark/Scala:} La adaptación al entorno de trabajo y la programación de las transformaciones necesarias para adaptar los datos al formato que exigen los algoritmos de clasificación de Spark.
+    \item \textbf{Detección y tratamiento de anomalías:} La separación entre errores reales en los datos (como taxímetros bloqueados o coordenadas erróneas) y viajes reales atípicos, para no borrar información útil por error.
+    \item \textbf{Visualización de distribuciones desequilibradas:} La necesidad de emplear escala logarítmica en los gráficos de Python para poder representar en una misma figura categorías o valores muy poco frecuentes (decenas o cientos de viajes) frente al resto.
+\end{itemize}
 
 \subsection{Reparto de tareas y dedicación}
+El trabajo se ha distribuido de manera equitativa entre los tres integrantes del equipo. Todos los miembros del grupo han participado en todas las tareas del proceso, sin embargo, hemos dividido las responsabilidades de la siguiente manera en la tabla~\ref{tab:dedicacion}.
+
 \begin{table}[H]
 \centering
 \small
 \begin{tabular}{lcp{7.5cm}}
 \toprule
-\textbf{Estudiante} & \textbf{Horas / \%} & \textbf{Tareas realizadas} \\
+\textbf{Estudiante} & \textbf{Horas / \%} & \textbf{Tareas principales realizadas} \\
 \midrule
-Gonzalo Agúndez Sáez & HORAS (XX\,\%) & TAREAS \\
-Paula Negro Asegurado & HORAS (XX\,\%) & TAREAS \\
-Diego Sanz Santos & HORAS (XX\,\%) & TAREAS \\
+Gonzalo Agúndez Sáez & 20 h (33,3\,\%) & Desarrollo de los scripts de preprocesado y exploración en Spark (Scala), división de los datos, implementación de las reglas de limpieza y formato final de las variables para el modelo. \\
+\addlinespace
+Paula Negro Asegurado & 20 h (33,3\,\%) & Redacción e integración de todo el documento en \LaTeX, diseño de tablas y gráficos, coordinación general e investigación sobre la utilidad de los distintos atributos. \\
+\addlinespace
+Diego Sanz Santos & 20 h (33,3\,\%) & Análisis de exploración de los datos usando Python, cálculo de todos los estadísticos, comprobación de correlaciones y generación de los diferentes gráficos. \\
 \bottomrule
 \end{tabular}
-\caption{Dedicación por integrante.}
+\caption{Dedicación y reparto de tareas por integrante del grupo.}
+\label{tab:dedicacion}
 \end{table}
 
 \newpage
