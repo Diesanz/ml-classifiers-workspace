@@ -75,7 +75,7 @@ test.cache()
 
 val nTrain = train.count()
 val nTest  = test.count()
-println(s"Train: $nTrain  Test: $nTest  (suma: ${nTrain + nTest}, total: $total)")
+println(s"Train: $nTrain  Test: $nTest  (total: $total)")
 
 println("Reparto de clases en train (antes de limpiar):")
 train.groupBy("trip_class").count().
@@ -101,12 +101,10 @@ test.groupBy("trip_class").count().
 //
 // Outliers de duración (NTOE):
 //  - trip_duration < 60 s: un viaje real de menos de 1 min es implausible
-//  - trip_duration > 3 h: 1.843 de los 2.112 superan las 23 h (artefacto,
+//  - trip_duration > 3 h: de los 2.112, 1.843 superan las 23 h (artefacto,
 //    p. ej. taxímetro sin apagar); entre 2 y 3 h hay solo ~141 viajes
 //
 // Notas:
-//  - Filtrar por duración es filtrar por la etiqueta, por eso en test se
-//    cuentan las filas perdidas y se reporta la tasa de no clasificados
 //  - distance_km supone que el destino se conoce al inicio del viaje
 
 println("\nPaso 5: limpieza (misma función para train y test)")
@@ -178,7 +176,6 @@ testClean.groupBy("trip_class").count().
 
 // Paso 6: construir atributos y eliminar los que no se usan
 //  - Se construyen: distance_km, pickup_hour, pickup_day
-//    (dayofweek de Spark: 1 = domingo ... 7 = sábado)
 //  - Se eliminan: id (identificador), dropoff_datetime (fuga de información),
 //    vendor_id (reparto de clases casi igual al global), trip_duration (solo
 //    servía para crear la clase) y pickup_datetime (ya extraída hora y día)
@@ -211,7 +208,7 @@ trainSel.printSchema()
 
 // Paso 7: transformación (features y label)
 // Los indexers son estimators: se ajustan (fit) SOLO con train y se aplican
-// a train y a test. Ajustarlos con test sería fuga de información (data leakage)
+// a train y a test. Ajustarlos con test sería fuga de información 
 
 println("\nPaso 7: transformación de atributos (features y label)")
 
