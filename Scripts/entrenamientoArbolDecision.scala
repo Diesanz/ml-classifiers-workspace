@@ -4,29 +4,40 @@ import org.apache.spark.ml.classification.DecisionTreeClassifier
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.mllib.evaluation.MulticlassMetrics
 
+:load preparacionDatos.scala
+// Paso 8: conversión a un problema de clasificación binaria
+// El preprocesado del primer entregable no se modifica: trainFinal y testFinal
+// tienen la etiqueta de 3 clases (0 = short, 1 = medium, 2 = long).
+// Siguiendo la simplificación que permite el enunciado, se agrupa la clase
+// mayoritaria (short) frente al resto (medium + long):
+//   0 = short (duración <= 10 min)
+//   1 = más de 10 min (medium + long): clase positiva
+// La nueva columna label se crea con when, por lo que ya no lleva los metadatos
+// de 3 clases del StringIndexer: el árbol verá 2 clases
+println("\nPaso 8: conversión a clasificación binaria (0 = short <= 10 min, 1 = más de 10 min)")
 
-// Paso 8: comprobación del reparto en el conjunto de entrenamiento completo
-// Se cachea trainFinal porque se usa varias veces: para partirlo ahora y
+val trainBin = trainFinal.withColumn("label", when(col("label") === 0.0, 0.0).otherwise(1.0))
+val testBin  = testFinal.withColumn("label", when(col("label") === 0.0, 0.0).otherwise(1.0))
+
+// Se cachea trainBin porque se usa varias veces: para partirlo ahora y
 // para entrenar el modelo final al terminar la exploración
-println("\nPaso 8: reparto de clases en trainFinal")
+trainBin.cache()
+val nTrainBin = trainBin.count()   // esperado: 1155830
 
-trainFinal.cache()
-val nTrainFinal = trainFinal.count()   // esperado: 1155830
-
-println(s"trainFinal: $nTrainFinal filas (label 0 = short, 1 = medium, 2 = long)")
-trainFinal.groupBy("label").count().
-  withColumn("percentage", round(col("count") / nTrainFinal * 100, 2)).
+println(s"trainBin: $nTrainBin filas")
+trainBin.groupBy("label").count().
+  withColumn("percentage", round(col("count") / nTrainBin * 100, 2)).
   orderBy("label").show()
 
 
-// Paso 9: segunda partición de trainFinal en trainSub (80 %) y validación (20 %)
+// Paso 9: segunda partición de trainBin en trainSub (80 %) y validación (20 %)
 //  - trainSub: para entrenar los árboles candidatos
 //  - validación: para estimar su error y elegir maxDepth y maxBins
 //  - el test no se usa en ningún momento de la exploración
 //  - semilla fija (distinta a la del split train/test) para que sea reproducible
-println("\nPaso 9: partición de trainFinal en trainSub / validación (80/20)")
+println("\nPaso 9: partición de trainBin en trainSub / validación (80/20)")
 
-val Array(trainSub, validation) = trainFinal.randomSplit(Array(0.8, 0.2), seed = 2026L)
+val Array(trainSub, validation) = trainBin.randomSplit(Array(0.8, 0.2), seed = 4676L)
 
 // Se cachean porque cada árbol de la exploración los recorre varias veces
 trainSub.cache()
@@ -34,7 +45,7 @@ validation.cache()
 
 val nTrainSub   = trainSub.count()
 val nValidation = validation.count()
-println(s"trainSub: $nTrainSub  validación: $nValidation  (suma: ${nTrainSub + nValidation}, trainFinal: $nTrainFinal)")
+println(s"trainSub: $nTrainSub  validación: $nValidation  (suma: ${nTrainSub + nValidation}, trainBin: $nTrainBin)")
 
 println("Reparto de clases en trainSub:")
 trainSub.groupBy("label").count().
@@ -48,14 +59,14 @@ validation.groupBy("label").count().
 
 
 // Paso 10: liberar memoria antes de la exploración
-// A partir de aquí solo se necesitan trainFinal, testFinal, trainSub y validación.
+// A partir de aquí solo se necesitan trainBin, testBin, trainSub y validación.
 // Los árboles profundos necesitan mucha memoria, así que se liberan los DataFrames
-// cacheados durante el preprocesado. testFinal se cachea (y se materializa con count)
+// cacheados durante el preprocesado. testBin se cachea (y se materializa con count)
 // antes de liberar testClean, del que depende
 println("\nPaso 10: liberando memoria de los DataFrames del preprocesado")
 
-testFinal.cache()
-val nTestFinal = testFinal.count()
+testBin.cache()
+val nTestBin = testBin.count()   // esperado: 288869
 
 rawTaxiDF.unpersist()
 taxiDF.unpersist()
@@ -143,9 +154,9 @@ def mostrarResumen(resultados: Seq[Resultado], titulo: String): Unit = {
 //    32 = valor por defecto; 64 = cortes más finos en distancia y coordenadas.
 //    Mínimo válido: 3 (flag_idx tiene 3 categorías en los metadatos por handleInvalid = keep)
 //  - Se añade (20, 16): árbol profundo para comprobar si aparece sobreajuste.
-//    Con maxDepth = 20 solo se usa maxBins = 16 porque (20, 64) agotó la memoria de la
-//    máquina virtual (OutOfMemoryError) y (20, 32) tarda más de 7 minutos; con
-//    maxDepth = 20 ya hay sobreajuste claro, así que más bins no aportan información
+//    Con maxDepth = 20 solo se usa maxBins = 16 porque, en pruebas previas, (20, 64)
+//    agotó la memoria de la máquina virtual (OutOfMemoryError) y (20, 32) tardó más
+//    de 7 minutos
 //  - El resto de parámetros se deja con su valor por defecto
 //  - En total: 3 x 3 + 1 = 10 combinaciones
 
@@ -170,70 +181,70 @@ if (ejecutarFase1) {
 }
 
 
-// Paso 12: fase 2 de la exploración (refinamiento alrededor del mejor de la fase 1)
-//  - El mejor de la fase 1 es maxDepth = 15, maxBins = 32 (error en validación 0,2140)
-//  - Entre 10 y 15 el error en validación baja; en 20 sube (sobreajuste):
-//    el óptimo está entre 10 y 20
-//  - maxBins apenas influye en la fase 1 (diferencias en el límite del ruido, unas
-//    2 milésimas): se fija en 32, el mejor en profundidad 15 y el valor por defecto
-//  - Se afina maxDepth en {12, 13, 14, 16, 17, 18}
+// Pasos 12 a 16 (fase 2, elección de parámetros, modelo final, métricas y guardado):
+// se añaden después de analizar los resultados de la fase 1
+
 val profundidades_fase2 = Seq(12, 13, 14, 16, 17, 18)
-val bins_fase2          = Seq(32)
+val bins_fase2          = Seq(16, 32)
 
 val parametros_fase2 = mezclaParametros(profundidades_fase2, bins_fase2)
-
-println(s"\nPaso 12: fase 2 de la exploración (${parametros_fase2.size} combinaciones; maxBins = 32)")
 
 val resultadosFase2 = explorar(parametros_fase2, trainSub, validation)
 mostrarResumen(resultadosFase2, "Resumen de la fase 2")
 
-// Resumen conjunto de las dos fases (la tabla que va a la memoria)
-mostrarResumen(resultadosFase1 ++ resultadosFase2, "Resumen de las dos fases")
-
+if (ejecutarFase1) {
+  mostrarResumen(resultadosFase1 ++ resultadosFase2, "Resumen de las dos fases")
+}
 
 // Paso 13: elección de los parámetros finales
-//  - Criterio: menor error en validación de las dos fases
-//  - Margen del ruido: con 230 890 ejemplos de validación y un error de ~0,214,
-//    sigma = sqrt(0,214 * 0,786 / 230 890) ~ 0,00085 -> +-0,0017 al 95 %
-//  - El mínimo es (15, 32) con 0,2140, pero (14, 32) da 0,2150: la diferencia (0,0010)
-//    está dentro del ruido. Ante dos modelos equivalentes se elige el más sencillo:
-//    (14, 32) tiene un 41 % menos de nodos (14 405 frente a 24 425) y menos sobreajuste
-val mejorMaxDepth = 14
+//  - Margen de ruido: con 230 890 ejemplos de validación y el mejor error (0,1513),
+//    sigma = sqrt(0,1513 * 0,8487 / 230 890) ~ 0,00075 -> +-0,0015 al 95 %
+//  - Dentro de ese margen del mejor (error <= 0,1528) empatan las profundidades 13 a 16
+//    con cualquier maxBins: las diferencias no son significativas
+//  - Entre las combinaciones empatadas se elige la más sencilla: (13, 32)
+//      · error en validación 0,1524 (a 0,0011 del mejor, dentro del ruido)
+//      · 7 499 nodos: un 44 % menos que (14, 32) y un 65 % menos que (15, 16)
+//      · el menor sobreajuste de los empatados (diferencia validación - trainSub = 0,012)
+//      · maxBins = 32 es el valor por defecto: como maxBins no influye, no se modifica
+val mejorMaxDepth = 13
 val mejorMaxBins  = 32
 
 println(s"\nPaso 13: parámetros elegidos: maxDepth = $mejorMaxDepth, maxBins = $mejorMaxBins")
 
 
-// Paso 14: modelo final con TODO el conjunto de entrenamiento (trainFinal)
+// Paso 14: modelo final con TODO el conjunto de entrenamiento (trainBin)
 // Solo se modifican maxDepth y maxBins; el resto de parámetros, por defecto
-println("\nPaso 14: modelo final (entrena con trainFinal, evalúa con test)")
+println("\nPaso 14: modelo final (entrena con trainBin, evalúa con test)")
 
 val DTtaxiFinal = new DecisionTreeClassifier()
 DTtaxiFinal.setMaxDepth(mejorMaxDepth)
 DTtaxiFinal.setMaxBins(mejorMaxBins)
 
 val inicioFinal = System.nanoTime()
-val DTtaxiModelFinal = DTtaxiFinal.fit(trainFinal)
+val DTtaxiModelFinal = DTtaxiFinal.fit(trainBin)
 val segundosFinal = (System.nanoTime() - inicioFinal) / 1e9
 
 val nodosFinal = DTtaxiModelFinal.numNodes
+println(s"Número de clases del modelo: ${DTtaxiModelFinal.numClasses}")   // esperado: 2
 
-// Error en trainFinal (resubstitución, solo informativo)
-val predictionsTrainFinal = DTtaxiModelFinal.transform(trainFinal).select("prediction", "label")
+// Error en trainBin (resubstitución, solo informativo)
+val predictionsTrainFinal = DTtaxiModelFinal.transform(trainBin).select("prediction", "label")
 val errorTrainFinal = 1 - metrics.evaluate(predictionsTrainFinal)
 
-// Error en test: es la ÚNICA vez que se usa el conjunto de prueba
-val predictionsTest = DTtaxiModelFinal.transform(testFinal).select("prediction", "label").cache()
+// Error en test: es la ÚNICA vez que se usa el conjunto de prueba.
+// Se guarda también probability para calcular el AUC y la curva ROC
+val predictionsTest = DTtaxiModelFinal.transform(testBin).
+  select("prediction", "label", "probability").cache()
 val errorTest = 1 - metrics.evaluate(predictionsTest)
 
 println(f"maxDepth = $mejorMaxDepth%2d  maxBins = $mejorMaxBins%3d  nodos = $nodosFinal%6d  " +
-        f"error trainFinal = $errorTrainFinal%.4f  error test = $errorTest%.4f  ($segundosFinal%.1f s)")
+        f"error trainBin = $errorTrainFinal%.4f  error test = $errorTest%.4f  ($segundosFinal%.1f s)")
 
 
 // Paso 15: métricas sobre test con ML y MLlib
 println("\nPaso 15: métricas sobre test")
 
-// ML (MulticlassClassificationEvaluator): métricas globales
+// ML (MulticlassClassificationEvaluator): tasa de acierto, error y F1
 val evaluadorF1 = new MulticlassClassificationEvaluator()
 evaluadorF1.setMetricName("f1")
 
@@ -241,31 +252,66 @@ println(f"Tasa de acierto = ${1 - errorTest}%.4f")
 println(f"Tasa de error   = $errorTest%.4f")
 println(f"F1 (ponderada)  = ${evaluadorF1.evaluate(predictionsTest)}%.4f")
 
-// MLlib (MulticlassMetrics): matriz de confusión y métricas por clase pasar a porcentage
+// ML (BinaryClassificationEvaluator): áreas bajo las curvas ROC y PR
+// (no dependen del umbral: miden lo bien que el árbol ordena los viajes).
+// Se usa la columna probability: en un árbol, rawPrediction contiene los recuentos
+// de cada clase en la hoja, no probabilidades, y daría un AUC incorrecto
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
+
+val evaluadorROC = new BinaryClassificationEvaluator()
+evaluadorROC.setMetricName("areaUnderROC")
+evaluadorROC.setRawPredictionCol("probability")
+
+val evaluadorPR = new BinaryClassificationEvaluator()
+evaluadorPR.setMetricName("areaUnderPR")
+evaluadorPR.setRawPredictionCol("probability")
+
+println(f"AUC ROC         = ${evaluadorROC.evaluate(predictionsTest)}%.4f")
+println(f"AUC PR          = ${evaluadorPR.evaluate(predictionsTest)}%.4f")
+
+// MLlib (MulticlassMetrics): matriz de confusión y métricas por clase
 // MulticlassMetrics trabaja con un RDD de parejas (prediction, label)
-val predictionsAndLabelsRDD = predictionsTest.rdd.map(r => (r.getDouble(0), r.getDouble(1)))
+val predictionsAndLabelsRDD = predictionsTest.select("prediction", "label").rdd.
+  map(r => (r.getDouble(0), r.getDouble(1)))
 val metricsMLlib = new MulticlassMetrics(predictionsAndLabelsRDD)
 
-// Filas = clase real, columnas = clase predicha, en el orden 0 = short, 1 = medium, 2 = long
-println("\nMatriz de confusión (filas = clase real, columnas = clase predicha; 0 = short, 1 = medium, 2 = long):")
+// Filas = clase real, columnas = clase predicha, en el orden 0 = short, 1 = más de 10 min
+//   | TN  FP |
+//   | FN  TP |
+println("\nMatriz de confusión (filas = clase real, columnas = clase predicha; 0 = short, 1 = más de 10 min):")
 println(metricsMLlib.confusionMatrix)
 
-// Métricas de cada clase (las ponderadas ocultan el comportamiento en la clase minoritaria, long)
 println("\nMétricas por clase:")
-println(f"short  (0): precision = ${metricsMLlib.precision(0.0)}%.4f  recall = ${metricsMLlib.recall(0.0)}%.4f  F1 = ${metricsMLlib.fMeasure(0.0)}%.4f")
-println(f"medium (1): precision = ${metricsMLlib.precision(1.0)}%.4f  recall = ${metricsMLlib.recall(1.0)}%.4f  F1 = ${metricsMLlib.fMeasure(1.0)}%.4f")
-println(f"long   (2): precision = ${metricsMLlib.precision(2.0)}%.4f  recall = ${metricsMLlib.recall(2.0)}%.4f  F1 = ${metricsMLlib.fMeasure(2.0)}%.4f")
+println(f"short          (0): precision = ${metricsMLlib.precision(0.0)}%.4f  recall = ${metricsMLlib.recall(0.0)}%.4f  F1 = ${metricsMLlib.fMeasure(0.0)}%.4f")
+println(f"más de 10 min  (1): precision = ${metricsMLlib.precision(1.0)}%.4f  recall = ${metricsMLlib.recall(1.0)}%.4f  F1 = ${metricsMLlib.fMeasure(1.0)}%.4f")
+
+// Punto del espacio ROC con el umbral por defecto (0,5), tomando como positiva la clase 1
+println(f"\nTasa de ciertos positivos tp = ${metricsMLlib.truePositiveRate(1.0)}%.4f  " +
+        f"Tasa de falsos positivos fp = ${metricsMLlib.falsePositiveRate(1.0)}%.4f")
+
+// MLlib (BinaryClassificationMetrics): puntos de la curva ROC
+// El score de cada viaje es la probabilidad de la clase 1 (proporción de viajes de más
+// de 10 min en la hoja del árbol). numBins = 20 reduce el número de puntos de la curva
+import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
+import org.apache.spark.ml.linalg.Vector
+
+val scoresAndLabelsRDD = predictionsTest.select("probability", "label").rdd.
+  map(r => (r.getAs[Vector](0)(1), r.getDouble(1)))
+val metricsBinarias = new BinaryClassificationMetrics(scoresAndLabelsRDD, 20)
+
+println("\nPuntos de la curva ROC (fp, tp):")
+metricsBinarias.roc().collect().foreach { case (fp, tp) => println(f"  ($fp%.4f; $tp%.4f)") }
 
 // Referencias para interpretar el error
-//  - Clasificador trivial que siempre predice la clase mayoritaria (short)
+//  - Clasificador trivial que siempre predice la clase mayoritaria (1 = más de 10 min)
 //  - Requisito del primer entregable: error >= 10 veces la tasa de no clasificados
 val nShortTest = predictionsTest.filter(col("label") === 0.0).count()
-val errorMayoritaria = 1 - nShortTest.toDouble / nTestFinal
+val errorMayoritaria = nShortTest.toDouble / nTestBin
 val tasaNoClasificados = unclassified.toDouble / nTest
 
-println(f"\nError del clasificador que siempre predice short = $errorMayoritaria%.4f")
-println(f"Tasa de no clasificados en test = $tasaNoClasificados%.4f  (10 veces = ${10 * tasaNoClasificados}%.4f)")
-println(s"¿Error en test >= 10 veces la tasa de no clasificados? ${errorTest >= 10 * tasaNoClasificados}")
+println(f"\nError del clasificador que siempre predice la clase mayoritaria = $errorMayoritaria%.4f")
+println(f"Tasa de no clasificados en test = $tasaNoClasificados%.4f")
+println(f"Error en test / tasa de no clasificados = ${errorTest / tasaNoClasificados}%.1f  (debe ser >= 10)")
 
 
 // Paso 16: guardar el modelo final en el directorio ./Modelo
