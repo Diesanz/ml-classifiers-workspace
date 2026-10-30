@@ -1,0 +1,483 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- Paquetes básicos ---
+\usepackage[spanish, es-tabla]{babel}
+\usepackage[utf8]{inputenc}     % Acentos
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla]{babel}     % Idioma
+\usepackage{geometry}           % Márgenes
+\usepackage{graphicx}           % Imágenes
+\usepackage{float}              % Posición exacta de figuras
+\usepackage{hyperref}           % Hipervínculos
+\usepackage[table]{xcolor}      % Colores (con table para \rowcolor)
+\usepackage{fancyhdr}           % Encabezados y pies de página
+\usepackage{titlesec}           % Formato de títulos
+\usepackage{listingsutf8}       % Soporte UTF-8 en listing
+\usepackage{listings}           % Código
+\usepackage{caption}            % Personalizar captions
+\usepackage{amsmath, amssymb}   % Símbolos matemáticos
+\usepackage{booktabs}           % Tablas elegantes
+\usepackage{listings}           % Código
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{seqsplit}
+
+\addto\captionsspanish{
+  \renewcommand{\tablename}{Tabla}
+  \renewcommand{\contentsname}{Tabla de contenidos}
+}
+
+% Marca para lo que falta rellenar (se ve en rojo en el PDF)
+\newcommand{\pend}[1]{\textcolor{red}{\textbf{[#1]}}}
+
+% --- Configuración de códigos ---
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!10},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible,
+  inputencoding=utf8,
+  extendedchars=true,
+  literate=
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1
+}
+
+% Estilo para Bash
+\lstdefinestyle{miEstiloBash}{
+    language=bash,
+    basicstyle=\small\ttfamily,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    breaklines=true,
+    captionpos=b
+}
+
+% Estilo para Scala
+\lstdefinestyle{miEstiloScala}{
+    language=Scala,
+    basicstyle=\small\ttfamily,
+    backgroundcolor=\color{gray!5},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black}\itshape,
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    breaklines=true,
+    captionpos=b,
+    morekeywords={val, var, def, class, object, trait, extends, with, match, case, new, if, else, for, while, return, type, import, package}
+}
+
+% Estilo para Java
+\lstdefinestyle{miEstiloJava}{
+    language=Java,
+    basicstyle=\small\ttfamily,
+    backgroundcolor=\color{gray!5},
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black}\itshape,
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    breaklines=true,
+    captionpos=b
+}
+
+% --- Configuración de márgenes ---
+\geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm}
+
+% --- Configuración de hipervínculos ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=cyan
+}
+
+% --- Encabezados y pies de página ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Universidad de Valladolid}
+\fancyhead[R]{Máster en Ingeniería Informática}
+\fancyfoot[C]{\thepage}
+
+% --- Formato de títulos ---
+\titleformat{\chapter}[hang]{\bfseries\huge}{\thechapter.}{1em}{}
+\titleformat{\section}[hang]{\bfseries\Large}{\thesection}{1em}{}
+
+% -- Información para la portada
+\title{\LARGE \textbf{Proyecto de Clasificación: Segunda Etapa}\\[0.3cm]
+\large \textbf{Selección sencilla de un modelo de clasificación}}
+
+\author{{\large \textbf{Autor:}}\\[0.2cm]
+    Diego Sanz Santos }
+\date{\normalsize \today}
+
+\makeatletter
+\let\thetitle\@title
+\let\theauthor\@author
+\let\thedate\@date
+\makeatother
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    \includegraphics[width=0.7\textwidth]{logoInfo.png}\\[1cm] % Descomentar si se tiene el logo
+
+    {\Huge \bfseries \thetitle}\\[1.5cm]
+
+    {\Large \bfseries Asignatura: Técnicas escalables de análisis de datos (Clasificadores)}\\[0.3cm]
+    {\large Escuela de Ingeniería Informática}\\[1.2cm]
+
+    \theauthor \\[0.3cm]
+    Grupo 3 -- Conjunto de datos 2 (\textit{NYC Taxi Trip Duration}) \\[0.2cm]
+    \textbf{Curso:} 2026 -- 2027 \\[0.3cm]
+    \textbf{Fecha:} \thedate
+
+    \vfill
+    \rule{0.5\linewidth}{0.5pt}\\
+    \textit{Universidad de Valladolid}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+\listoffigures    % Índice de imágenes
+\listoftables     % Índice de tablas
+
+% =====================================================================
+% ACRÓNIMOS
+% =====================================================================
+\newpage
+\section*{Acrónimos}
+\addcontentsline{toc}{section}{Acrónimos}
+
+\begin{center}
+\begin{tabular}{lp{11.5cm}}
+\toprule
+Acrónimo & Significado \\
+\midrule
+AUC   & Área bajo la curva (\textit{Area Under the Curve}) \\
+FPR   & Tasa de falsos positivos (\textit{False Positive Rate}) \\
+IC    & Intervalo de confianza \\
+ML    & Biblioteca de aprendizaje automático de Spark basada en \textit{DataFrames} (\textit{Machine Learning}) \\
+MLlib & Biblioteca de aprendizaje automático de Spark basada en RDD \\
+NTAIE & Número total de ausentes o inconsistentes eliminados \\
+NTOE  & Número total de \textit{outliers} eliminados \\
+NYC   & Ciudad de Nueva York (\textit{New York City}) \\
+OOM   & Falta de memoria (\textit{Out Of Memory}) \\
+PR    & Precisión--exhaustividad (\textit{Precision--Recall}) \\
+RDD   & Conjunto de datos distribuido resiliente (\textit{Resilient Distributed Dataset}) \\
+ROC   & Característica operativa del receptor (\textit{Receiver Operating Characteristic}) \\
+TLC   & Comisión de Taxis y Limusinas de Nueva York (\textit{Taxi and Limousine Commission}) \\
+TPR   & Tasa de verdaderos positivos (\textit{True Positive Rate}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\newpage
+\section{Introducción}
+
+Este trabajo corresponde a la segunda etapa del proyecto de clasificación en Spark, y parte de los conjuntos de entrenamiento y prueba del entregable anterior, ya limpios y transformados al formato de Spark ML. El conjunto de datos es el de la competición de Kaggle \textit{New York City Taxi Trip Duration}\footnote{\url{https://www.kaggle.com/c/nyc-taxi-trip-duration/data}}. El objetivo es seleccionar, de forma sencilla e individual, un árbol de decisión de Spark ML variando solo sus parámetros \texttt{maxDepth} y \texttt{maxBins}. Para simplificar, el problema de tres clases se convierte en uno binario: viajes cortos (\textit{short}, hasta 10 minutos) frente a viajes de más de 10 minutos.
+
+Para elegir los parámetros no se usa el conjunto de prueba ni las utilidades de selección de modelos de Spark ML. El conjunto de entrenamiento se divide en un subconjunto de entrenamiento, con el que se construyen los árboles, y otro de validación, con el que se estima su error. El modelo final se entrena con todo el conjunto de entrenamiento y se evalúa una única vez sobre el de prueba (figura~\ref{fig:division}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{divisionDataset.png}
+    \caption{División del conjunto de datos en entrenamiento, validación y prueba, y uso de cada parte en la selección del modelo. Fuente: \cite{raschka2022}.}
+    \label{fig:division}
+\end{figure}
+
+La limpieza del entregable anterior eliminó 2\,920 filas del conjunto de prueba: 663 por ausentes o inconsistentes (NTAIE) y 2\,257 por \textit{outliers} (NTOE). Como no llegan al clasificador, se cuentan como no clasificadas, y la \textbf{tasa de no clasificados} es (NTAIE + NTOE) / tamaño de prueba = 2\,920 / 291\,789 $\approx$ 1,00\,\%. Según el enunciado del proyecto, debe ser al menos un orden de magnitud menor que la tasa de error del clasificador.
+
+La sección~2 resume el conjunto de datos, la sección~3 recoge el proceso de exploración, desde los conjuntos usados hasta la evaluación del modelo final, la sección~4 presenta las conclusiones y la sección~5 el tiempo empleado.
+
+
+\section{Resumen ejecutivo del conjunto de datos}
+\begin{itemize}
+    \item \textbf{Origen de los datos:} competición de Kaggle \textit{New York City Taxi Trip Duration}, basada en los registros de taxis amarillos de Nueva York de 2016 publicados por la NYC Taxi and Limousine Commission (TLC). Se ha utilizado el fichero \texttt{train.csv} disponible en \url{https://www.kaggle.com/c/nyc-taxi-trip-duration/data}.
+    \item \textbf{Propósito:} el propósito original es predecir la duración de un viaje en taxi a partir de sus atributos (tiempo, coordenadas, pasajeros, etc.). En el proyecto se plantea como un problema de \textbf{clasificación multiclase} (viaje corto, medio o largo) y, en esta etapa, como un problema de \textbf{clasificación binaria} (viaje corto frente a no corto).
+    \item \textbf{Tamaño:} 1\,458\,644 instancias y 11 atributos originales.
+    \item \textbf{Atributos (11 en total):}
+    \begin{itemize}
+        \item \textbf{Nominales (4):} \texttt{id} (identificador único del viaje), \texttt{vendor\_id} (proveedor del registro) y las marcas temporales \texttt{pickup\_datetime} y \texttt{dropoff\_datetime}.
+        \item \textbf{Numéricos continuos (5):} \texttt{pickup\_longitude}, \texttt{pickup\_latitude}, \seqsplit{\texttt{dropoff\_longitude}}, \texttt{dropoff\_latitude} y \texttt{trip\_duration} (en segundos).
+        \item \textbf{Numéricos discretos (1):} \texttt{passenger\_count}.
+        \item \textbf{Booleanos (1):} \texttt{store\_and\_fwd\_flag} (Y/N).
+    \end{itemize}
+    \item \textbf{Descripción de la clase:} la clase se construye a partir de \texttt{trip\_duration}, que se descarta como atributo predictor. Se definen tres etiquetas: \textit{short} (duración $\leq$ 10 min), \textit{medium} (entre 10 y 25 min) y \textit{long} ($>$ 25 min). La distribución es: \textit{short} 44,76\,\%, \textit{medium} 42,87\,\%, \textit{long} 12,37\,\%.
+\end{itemize}
+
+\subsection{La clase en esta etapa}
+
+La clase \texttt{trip\_class} se construye a partir de \texttt{trip\_duration} con los cortes del enunciado (\textit{short}, \textit{medium} y \textit{long}). Para simplificar el cálculo del error, el enunciado de esta etapa permite convertir el problema en binario, agrupando la clase mayoritaria frente al resto. Como la mayoritaria es \textit{short}, la nueva clase distingue los viajes de hasta 10 minutos de los de más de 10 minutos (\textit{medium} y \textit{long}). Se prefiere a la otra opción propuesta (cortos frente a largos) porque no obliga a descartar los viajes \textit{medium}, casi la mitad del conjunto, y deja las clases casi equilibradas. La agrupación se aplica después de la partición y la limpieza del entregable anterior (sección~\ref{sec:conjuntos}).
+
+
+  
+% =====================================================================
+\section{Proceso de exploración y selección del modelo}
+% =====================================================================
+% [Enunciado 3] Proceso de exploración, por qué esas combinaciones y los
+% errores obtenidos, hasta la evaluación del modelo final.
+ 
+\subsection{Conjuntos de datos y estimación del error}
+\label{sec:conjuntos}
+
+Los conjuntos se obtienen en este orden:
+
+\begin{enumerate}
+    \item \textbf{Partición en entrenamiento y prueba} (entregable anterior): 80\,\% y 20\,\% del conjunto original con \texttt{randomSplit} y semilla 42.
+    \item \textbf{Limpieza} (entregable anterior): la misma función se aplica a los dos conjuntos. Entrenamiento pasa de 1\,166\,855 a 1\,155\,830 filas y prueba de 291\,789 a 288\,869 (tabla~\ref{tab:limpios}).
+    \item \textbf{Paso a clase binaria} (esta etapa): sobre los conjuntos ya limpios, la etiqueta 0 (\textit{short}) se mantiene y las etiquetas 1 y 2 (\textit{medium} y \textit{long}) pasan a 1. Así se obtienen \texttt{trainBin} y \texttt{testBin}, con las mismas filas que antes (tabla~\ref{tab:conjuntos}).
+    \item \textbf{Partición en subentrenamiento y validación} (esta etapa): 80\,\% y 20\,\% de \texttt{trainBin} con semilla 4676, para obtener \texttt{trainSub} y validación.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Clase & Entrenamiento & Prueba \\
+\midrule
+\textit{short}  & 514\,812 (44,54\,\%) & 128\,157 (44,37\,\%) \\
+\textit{medium} & 498\,625 (43,14\,\%) & 125\,114 (43,31\,\%) \\
+\textit{long}   & 142\,393 (12,32\,\%) &  35\,598 (12,32\,\%) \\
+\midrule
+\textbf{Total}  & 1\,155\,830 & 288\,869 \\
+\bottomrule
+\end{tabular}
+\caption{Reparto de las tres clases originales en entrenamiento y prueba tras la limpieza del entregable anterior.}
+\label{tab:limpios}
+\end{table}
+
+El error de cada árbol es $1 - \text{exactitud}$ sobre validación. El error sobre \texttt{trainSub} (resubstitución) solo se muestra para ver el sobreajuste, y \texttt{testBin} no se usa hasta evaluar el modelo final.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llrrr}
+\toprule
+Conjunto & Uso & Instancias & \textit{short} (0) & $> 10$ min (1) \\
+\midrule
+\texttt{trainBin}   & Entrenar modelo final & 1\,155\,830 & 514\,812 (44,54\,\%) & 641\,018 (55,46\,\%) \\
+\texttt{testBin}    & Evaluar modelo final  & 288\,869   & 128\,157 (44,37\,\%) & 160\,712 (55,63\,\%) \\
+\midrule
+\multicolumn{5}{l}{\textit{División de \texttt{trainBin} (80/20, semilla 4676)}} \\
+\quad\texttt{trainSub} & Entrenar candidatos & 925\,752 & 412\,541 (44,56\,\%) & 513\,211 (55,44\,\%) \\
+\quad Validación       & Elegir parámetros   & 230\,078 & 102\,271 (44,45\,\%) & 127\,807 (55,55\,\%) \\
+\bottomrule
+\end{tabular}
+\caption{Conjuntos usados en esta etapa, ya limpios y con la clase binaria. \texttt{trainSub} y validación se obtienen dividiendo \texttt{trainBin}.}
+\label{tab:conjuntos}
+\end{table}
+
+\subsection{Valores considerados e hipótesis}
+\label{sec:hipotesis}
+% - maxDepth: 5 (por defecto), 10, 15 y 20 (árbol profundo).
+% - maxBins: 16, 32 (por defecto) y 64. El mínimo válido es 3 (flag_idx con
+%   handleInvalid = keep tiene 3 valores en los metadatos).
+% - El resto de parámetros, por defecto.
+ 
+\pend{Por escribir: valores considerados}
+ 
+Antes de entrenar ningún árbol se plantean cuatro hipótesis. \textbf{H1:} el error en validación bajará al aumentar \texttt{maxDepth} hasta una profundidad intermedia y después volverá a subir por sobreajuste, mientras que el error en \texttt{trainSub} seguirá bajando. \textbf{H2:} \texttt{maxBins} influirá mucho menos que \texttt{maxDepth}, porque la distancia, el atributo más informativo, ya se divide bien con pocos umbrales, y la hora y el día tienen pocos valores distintos. \textbf{H3:} el número de nodos, el tiempo y la memoria crecerán mucho con la profundidad, por lo que los árboles más profundos podrían no caber en memoria. \textbf{H4:} el error en prueba del modelo final será parecido al de validación y claramente menor que el del clasificador trivial, ya que ambos conjuntos son grandes y siguen la misma distribución.
+ 
+\subsection{Fase 1: exploración gruesa}
+% - (20,32) y (20,64) se quitaron por falta de memoria (OutOfMemoryError).
+% - Conclusiones: la profundidad manda, los bins apenas influyen y con 20
+%   aparece sobreajuste.
+ 
+\pend{Por escribir}
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{rrrrrr}
+\toprule
+\texttt{maxDepth} & \texttt{maxBins} & Nodos & Error \texttt{trainSub} & Error validación & Tiempo (s) \\
+\midrule
+ 5 & 16 & 23 & 0,1746 & 0,1761 & 11,7 \\
+ 5 & 32 & 23 & 0,1766 & 0,1780 & 10,6 \\
+ 5 & 64 & 23 & 0,1750 & 0,1765 & 10,3 \\
+10 & 16 & 857 & 0,1575 & 0,1612 & 19,2 \\
+10 & 32 & 907 & 0,1556 & 0,1596 & 21,5 \\
+10 & 64 & 939 & 0,1557 & 0,1597 & 21,1 \\
+15 & 16 & 21\,231 & 0,1305 & \textbf{0,1513} & 66,8 \\
+15 & 32 & 22\,587 & 0,1268 & 0,1521 & 75,8 \\
+15 & 64 & 22\,335 & 0,1255 & 0,1526 & 93,4 \\
+20 & 16 & 126\,451 & 0,0820 & 0,1646 & 259,6 \\
+\bottomrule
+\end{tabular}
+\caption{Resultados de la fase 1 (entrenamiento con \texttt{trainSub}, error en validación). En negrita, el menor error en validación.}
+\label{tab:fase1}
+\end{table}
+ 
+ 
+\subsection{Fase 2: exploración fina}
+% - Profundidades alrededor del mejor valor: 12, 13, 14, 16, 17 y 18.
+% - Solo bins 16 y 32 (64 no aporta y gasta más memoria).
+ 
+\pend{Por escribir}
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{rrrrrr}
+\toprule
+\texttt{maxDepth} & \texttt{maxBins} & Nodos & Error \texttt{trainSub} & Error validación & Tiempo (s) \\
+\midrule
+12 & 16 & 3\,553 & 0,1482 & 0,1552 & 29,7 \\
+12 & 32 & 3\,995 & 0,1462 & 0,1543 & 33,1 \\
+13 & 16 & 6\,845 & 0,1434 & 0,1529 & 33,3 \\
+\rowcolor{gray!15}
+13 & 32 & 7\,499 & 0,1403 & 0,1524 & 33,8 \\
+14 & 16 & 12\,501 & 0,1375 & 0,1521 & 44,4 \\
+14 & 32 & 13\,469 & 0,1341 & \textbf{0,1513} & 50,1 \\
+16 & 16 & 33\,685 & 0,1224 & 0,1520 & 90,9 \\
+16 & 32 & 35\,057 & 0,1180 & 0,1522 & 98,3 \\
+17 & 16 & 50\,583 & 0,1135 & 0,1545 & 120,9 \\
+17 & 32 & 51\,619 & 0,1079 & 0,1537 & 130,5 \\
+18 & 16 & 71\,809 & 0,1038 & 0,1568 & 164,0 \\
+18 & 32 & 72\,163 & 0,0967 & 0,1566 & 184,1 \\
+\bottomrule
+\end{tabular}
+\caption{Resultados de la fase 2. En negrita, el menor error en validación; en gris, la combinación elegida.}
+\label{tab:fase2}
+\end{table}
+ 
+ 
+\subsection{Elección de los parámetros}
+% - sigma = sqrt(0,1513 * 0,8487 / 230078) = 0,00075 -> margen 1,96 sigma = 0,0015.
+% - Dentro del margen del mejor (0,1513): profundidades 13 a 16.
+% - Se elige la más simple: (13, 32), con 7499 nodos frente a 13469.
+% - Los bins no deciden: dentro del margen el ganador cambia entre 16 y 32.
+ 
+El error en validación del mejor árbol es $e = 0{,}1513$ sobre $n = 230\,078$ instancias, así que
+\[
+\sigma = \sqrt{\frac{e(1-e)}{n}} = \sqrt{\frac{0{,}1513 \cdot 0{,}8487}{230\,078}} \approx 0{,}00075,
+\qquad 1{,}96\,\sigma \approx 0{,}0015 .
+\]
+ 
+\pend{Por escribir}
+ 
+\subsection{Modelo final y evaluación en prueba}
+% - Se entrena con todo trainBin y maxDepth = 13, maxBins = 32.
+% - Intervalo de confianza del error en test:
+%   sigma = sqrt(0,1512 * 0,8488 / 288869) = 0,00067 -> [0,1499 ; 0,1525].
+% - Comparación con el clasificador trivial (0,4437).
+% - Tasa de no clasificados: 1,00 %; ratio 15,1 >= 10.
+% - Modelo guardado en ./Modelo.
+ 
+\pend{Por escribir}
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Medida & Valor \\
+\midrule
+\texttt{maxDepth} / \texttt{maxBins} & 13 / 32 \\
+Número de nodos & 7\,429 \\
+Error en entrenamiento completo (\texttt{trainBin}) & 0,1425 \\
+Error en prueba (\texttt{testBin}) & 0,1512 \\
+Intervalo de confianza al 95\,\% & $[0{,}1499;\ 0{,}1525]$ \\
+Exactitud (\textit{accuracy}) & 0,8488 \\
+F1 ponderada & 0,8489 \\
+Área bajo la curva ROC & 0,9235 \\
+Área bajo la curva PR & 0,9363 \\
+Error del clasificador trivial & 0,4437 \\
+Tasa de no clasificados & 1,00\,\% \\
+Error en prueba / tasa de no clasificados & 15,1 \\
+\bottomrule
+\end{tabular}
+\caption{Resultados del modelo final.}
+\label{tab:final}
+\end{table}
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+ & Predicho \textit{short} & Predicho $> 10$ min \\
+\midrule
+Real \textit{short} & 107\,135 & 21\,022 \\
+Real $> 10$ min & 22\,649 & 138\,063 \\
+\bottomrule
+\end{tabular}
+\caption{Matriz de confusión en el conjunto de prueba.}
+\label{tab:confusion}
+\end{table}
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Clase & Precisión & Recall & F1 \\
+\midrule
+\textit{short} (0) & 0,8255 & 0,8360 & 0,8307 \\
+$> 10$ min (1) & 0,8679 & 0,8591 & 0,8634 \\
+\bottomrule
+\end{tabular}
+\caption{Medidas por clase en el conjunto de prueba.}
+\label{tab:porclase}
+\end{table}
+ 
+% =====================================================================
+\section{Conclusiones}
+% =====================================================================
+% Incluir la frase: se han usado los conjuntos del entregable 1 sin modificar;
+% en su corrección se señaló que algunos criterios de limpieza eran demasiado
+% estrictos y se revisarán en el entregable 3.
+ 
+\pend{Por escribir}
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{clp{8.5cm}}
+\toprule
+Hipótesis & ¿Se cumple? & Evidencia \\
+\midrule
+H1 & Sí & El error en validación baja de 0,1761 (profundidad 5) a 0,1513 (14--15) y sube a 0,1646 con 20; el de \texttt{trainSub} baja siempre, hasta 0,0820. \\
+H2 & Sí & Con la misma profundidad, cambiar \texttt{maxBins} mueve el error como mucho 0,002, del orden del margen de 0,0015. \\
+H3 & Sí & De 23 nodos y 11\,s (profundidad 5) a 126\,451 nodos y 260\,s (profundidad 20); (20,\,32) y (20,\,64) se quedaron sin memoria. \\
+H4 & Sí & Error en validación 0,1524 y en prueba 0,1512, frente a 0,4437 del clasificador trivial. \\
+\bottomrule
+\end{tabular}
+\caption{Comprobación de las hipótesis de la sección~\ref{sec:hipotesis}.}
+\label{tab:hipotesis}
+\end{table}
+ 
+% =====================================================================
+\section{Tiempo empleado}
+% =====================================================================
+% [Enunciado 4]
+ 
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Tarea & Horas \\
+\midrule
+Estudio de los parámetros del árbol en Spark & \pend{?} \\
+Programación del script & \pend{?} \\
+Ejecuciones de la exploración & \pend{?} \\
+Redacción de la memoria & \pend{?} \\
+\midrule
+\textbf{Total} & \pend{?} \\
+\bottomrule
+\end{tabular}
+\caption{Tiempo empleado en el entregable.}
+\label{tab:tiempo}
+\end{table}
+
+\newpage
+\phantomsection
+\addcontentsline{toc}{section}{Referencias}
+\nocite{*}   % muestra todas las entradas del .bib aunque no se citen
+\bibliographystyle{plain}
+\bibliography{referencias}
+
+\end{document}
