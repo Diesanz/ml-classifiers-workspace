@@ -147,7 +147,6 @@
 \end{titlepage}
 
 \tableofcontents
-\clearpage
 \listoffigures    % Índice de imágenes
 \listoftables     % Índice de tablas
 
@@ -155,7 +154,6 @@
 % ACRÓNIMOS: \ac{X} en el texto (la primera vez sale desarrollado y las
 % siguientes solo la sigla); \acs{X} en tablas y pies de figura (solo la sigla)
 % =====================================================================
-\newpage
 \section*{Acrónimos}
 
 \begin{acronym}[NTAIE]
@@ -168,18 +166,18 @@
 \newpage
 \section{Introducción}
 
-Este trabajo corresponde a la segunda etapa del proyecto de clasificación en Spark, y parte de los conjuntos de entrenamiento y prueba del entregable anterior, ya limpios y transformados al formato de Spark ML. El conjunto de datos es el de la competición de Kaggle \textit{New York City Taxi Trip Duration}\footnote{\url{https://www.kaggle.com/c/nyc-taxi-trip-duration/data}}. El objetivo es seleccionar, de forma sencilla e individual, un árbol de decisión de Spark ML variando solo sus parámetros \texttt{maxDepth} y \texttt{maxBins}. Para simplificar, el problema de tres clases se convierte en uno binario: viajes cortos (\textit{short}, hasta 10 minutos) frente a viajes de más de 10 minutos.
+Este trabajo corresponde a la segunda etapa del proyecto de clasificación en Spark, y parte de los conjuntos de entrenamiento y prueba del entregable anterior, ya limpios y transformados al formato de Spark ML. El conjunto de datos es el de la competición de Kaggle \textit{New York City Taxi Trip Duration}. El objetivo es seleccionar, de forma sencilla e individual, un árbol de decisión de Spark ML variando solo sus parámetros \texttt{maxDepth} y \texttt{maxBins}. Para simplificar, el problema de tres clases se convierte en uno binario: viajes cortos (\textit{short}, hasta 10 minutos) frente a viajes de más de 10 minutos.
 
 Para elegir los parámetros no se usa el conjunto de prueba ni las utilidades de selección de modelos de Spark ML. El conjunto de entrenamiento se divide en un subconjunto de entrenamiento, con el que se construyen los árboles, y otro de validación, con el que se estima su error. El modelo final se entrena con todo el conjunto de entrenamiento y se evalúa una única vez sobre el de prueba (figura~\ref{fig:division}).
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\linewidth]{divisionDataset.png}
+    \includegraphics[width=0.60\linewidth]{divisionDataset.png}
     \caption{División del conjunto de datos en entrenamiento, validación y prueba, y uso de cada parte en la selección del modelo. Fuente: \cite{raschka2022}.}
     \label{fig:division}
 \end{figure}
 
-La limpieza del entregable anterior eliminó 2\,920 filas del conjunto de prueba: 663 por ausentes o inconsistentes y 2\,257 por \textit{outliers}, que son, respectivamente, el \ac{NTAIE} y el \ac{NTOE}. Como no llegan al clasificador, se cuentan como no clasificadas, y la \textbf{tasa de no clasificados} es (\acs{NTAIE} + \acs{NTOE}) / tamaño de prueba = 2\,920 / 291\,789 $\approx$ 1,00\,\%. Según el enunciado del proyecto, debe ser al menos un orden de magnitud menor que la tasa de error del clasificador.
+La limpieza del entregable anterior eliminó 2\,920 filas del conjunto de prueba: 663 por ausentes o inconsistentes y 2\,257 por \textit{outliers}, que son, respectivamente, el \ac{NTAIE} y el \ac{NTOE}. Como no llegan al clasificador, se cuentan como no clasificadas (sección~\ref{sec:noclasificados}).
 
 La sección~2 resume el conjunto de datos, la sección~3 recoge el proceso de exploración, desde los conjuntos usados hasta la evaluación del modelo final, la sección~4 presenta las conclusiones y la sección~5 el tiempo empleado.
 
@@ -201,7 +199,7 @@ La sección~2 resume el conjunto de datos, la sección~3 recoge el proceso de ex
 
 \subsection{La clase en esta etapa}
 
-La clase \texttt{trip\_class} se construye a partir de \texttt{trip\_duration} con los cortes del enunciado (\textit{short}, \textit{medium} y \textit{long}). Para simplificar el cálculo del error, el enunciado de esta etapa permite convertir el problema en binario, agrupando la clase mayoritaria frente al resto. Como la mayoritaria es \textit{short}, la nueva clase distingue los viajes de hasta 10 minutos de los de más de 10 minutos (\textit{medium} y \textit{long}). Se prefiere a la otra opción propuesta (cortos frente a largos) porque no obliga a descartar los viajes \textit{medium}, casi la mitad del conjunto, y deja las clases casi equilibradas. La agrupación se aplica después de la partición y la limpieza del entregable anterior (sección~\ref{sec:conjuntos}).
+Para simplificar el cálculo del error, el enunciado de esta etapa permite convertir el problema en binario, agrupando la clase mayoritaria frente al resto. Como la mayoritaria es \textit{short}, la nueva clase distingue los viajes de hasta 10 minutos de los de más de 10 minutos (\textit{medium} y \textit{long}). Se prefiere a la otra opción propuesta (cortos frente a largos) porque no obliga a descartar los viajes \textit{medium}, casi la mitad del conjunto, y deja las clases casi equilibradas.
 
 
   
@@ -244,7 +242,7 @@ Cada árbol entrenado con una combinación de parámetros es una \textbf{hipóte
 \[
 e_S(h) = \frac{r}{n} = 1 - \text{tasa de acierto},
 \]
-donde $n$ es el número de ejemplos de $S$ y $r$ el número de ellos mal clasificados. Durante la exploración, $S$ es el conjunto de \textbf{validación}. El error sobre \texttt{trainSub} (error de resubstitución) se muestra solo para ver el sobreajuste: es optimista, porque el árbol se evalúa con los mismos ejemplos con los que se construyó; como señala Domingos, acertar en el entrenamiento es fácil, basta con memorizar los ejemplos~\cite{domingos2012}. \texttt{testBin} no se usa hasta evaluar el modelo final.
+donde $n$ es el número de ejemplos de $S$ y $r$ el número de ellos mal clasificados. Durante la exploración, $S$ es el conjunto de \textbf{validación}. El error sobre \texttt{trainSub} (error de resubstitución) se muestra solo para ver el sobreajuste: es optimista, porque el árbol se evalúa con los mismos ejemplos con los que se construyó; como señala Domingos, acertar en el entrenamiento es fácil, basta con memorizar los ejemplos~\cite{domingos2012}. \texttt{testBin} no se usa hasta evaluar el modelo final. No se asignan pesos a las clases ni se usan métricas ponderadas para elegir: las dos clases están casi equilibradas (55/45, tabla~\ref{tab:conjuntos}) y no hay motivo para considerar un tipo de error más grave que el otro, así que la tasa de error es un criterio adecuado.
 
 \begin{table}[H]
 \centering
@@ -362,7 +360,7 @@ Con todo lo visto hasta este punto, es momento de tomar una decisión. La explor
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\linewidth]{diagramas/entrenamiento.png}
-    \caption{Error en validación y en \texttt{trainSub} según la profundidad (\texttt{maxBins} = 16), con los resultados de las dos fases.}
+    \caption{Error en validación y en \texttt{trainSub} según la profundidad (\texttt{maxBins} = 16), con los resultados de las dos fases. Elaboración propia con Excel a partir de la salida del script.}
     \label{fig:errorProfundidad}
 \end{figure}
  
@@ -380,7 +378,7 @@ Con el mejor árbol, $e_S(h) = 0{,}1513$ y $n = 230\,078$, las dos condiciones s
 \sigma = \sqrt{\frac{0{,}1513 \cdot 0{,}8487}{230\,078}} \approx 0{,}00075 .
 \]
 
-Si otro árbol tiene un error dentro del margen $\pm z_N \sigma$ del mejor, la diferencia entre ambos puede deberse solo al azar de la muestra de validación, y no se puede afirmar que uno sea mejor que el otro. Por eso, entre todas las combinaciones que caen dentro del margen se elige la \textbf{más sencilla}, la de menos nodos: un árbol más pequeño es más rápido, ocupa menos memoria y tiene menos riesgo de sobreajuste.
+Si otro árbol tiene un error dentro del margen $\pm z_N \sigma$ del mejor, la diferencia entre ambos puede deberse solo al azar de la muestra de validación, y no se puede afirmar que uno sea mejor que el otro. Por eso, entre todas las combinaciones que caen dentro del margen se elige la \textbf{más sencilla}, la de menos nodos: un árbol más pequeño es más rápido, ocupa menos memoria y tiene menos riesgo de sobreajuste.Además, al comparar muchos árboles con el mismo conjunto de validación, alguno puede parecer mejor solo por azar, un problema de comparaciones múltiples~\cite{domingos2012}.
 
 La tabla~\ref{tab:margenes} muestra cómo cambia la elección según el nivel de confianza.
 
@@ -407,13 +405,13 @@ Al 95\,\%, quedan dentro del margen (error $\leq 0{,}1528$) la combinación (13,
 
 \subsection{Modelo final y evaluación en prueba}
 
-El modelo final se entrena con todo \texttt{trainBin}, con \texttt{maxDepth} = 13, \texttt{maxBins} = 32 y el resto de parámetros por defecto, y se guarda en el directorio \texttt{./Modelo}. Se evalúa \textbf{una única vez} sobre \texttt{testBin}, que no ha intervenido en ninguna decisión, por lo que su tasa de error es una estimación honesta del error verdadero. Además, como el modelo final se entrena con más datos que los árboles de la exploración, el error estimado tiende a ser pesimista y no optimista, que es lo que se busca: las estimaciones optimistas no son admisibles. El error de resubstitución en \texttt{trainBin} (0,1425) sí es optimista, y se muestra solo como referencia.
+El modelo final se entrena con todo \texttt{trainBin}, con \texttt{maxDepth} = 13, \texttt{maxBins} = 32 y el resto de parámetros por defecto, y se guarda en el directorio \texttt{./Modelo}. Se evalúa \textbf{una única vez} sobre \texttt{testBin}, que no ha intervenido en ninguna decisión, por lo que su tasa de error es una estimación honesta del error verdadero. Además, como el modelo final se entrena con más datos que los árboles de la exploración, el error estimado tiende a ser pesimista y no optimista, que es lo que se busca: las estimaciones optimistas no son admisibles.
 
 Con $e_S(h) = 0{,}1512$ y $n = 288\,869$, $\sigma \approx 0{,}00067$, y el intervalo de confianza al 95\,\% es $0{,}1512 \pm 1{,}96 \cdot 0{,}00067 = [0{,}1499;\ 0{,}1525]$. El error en validación del árbol elegido (0,1524) cae dentro de este intervalo, así que la estimación de la exploración era fiable. El error es casi tres veces menor que el del clasificador trivial (0,4437), que siempre predice la clase mayoritaria.
 
-\paragraph{Tasa de no clasificados.} La limpieza del entregable anterior eliminó 2\,920 viajes del conjunto de prueba original (291\,789): 663 por ausentes o inconsistentes (\ac{NTAIE}) y 2\,257 por \textit{outliers} de duración (\ac{NTOE}). Esos viajes nunca llegan al árbol, así que no se pueden contar como aciertos ni como errores: son no clasificados, y su tasa es $2\,920 / 291\,789 = 1{,}00\,\%$. El proyecto exige que sea al menos un orden de magnitud menor que la tasa de error, es decir, que el error sea como mínimo diez veces mayor. Se cumple: $0{,}1512 / 0{,}0100 = 15{,}1$. En la práctica, esto significa que los viajes eliminados no pueden cambiar la conclusión: si todos se hubieran clasificado bien, el error sobre el conjunto de prueba original sería $43\,671 / 291\,789 = 0{,}1497$, y si todos se hubieran clasificado mal, $(43\,671 + 2\,920) / 291\,789 = 0{,}1597$. En cualquier caso, el error sigue en torno al 15\,\%.
+\paragraph{Tasa de no clasificados.}\label{sec:noclasificados} La limpieza del entregable anterior eliminó 2\,920 viajes del conjunto de prueba original (291\,789): 663 por ausentes o inconsistentes (\ac{NTAIE}) y 2\,257 por \textit{outliers} de duración (\ac{NTOE}). Como nunca llegan al árbol, son no clasificados, y su tasa es $2\,920 / 291\,789 = 1{,}00\,\%$. El proyecto exige que sea al menos un orden de magnitud menor que la tasa de error, y se cumple: $0{,}1512 / 0{,}0100 = 15{,}1$. Aunque todos esos viajes se hubieran clasificado bien o todos mal, el error sobre el conjunto de prueba original estaría entre 0,1497 y 0,1597, en torno al 15\,\%.
 
-Las demás métricas, como la matriz de confusión, la precisión, el recall, la F1 y las áreas bajo las curvas \ac{ROC} y \ac{PR}, \textbf{solo se calculan para el modelo final}, sobre \texttt{testBin}: la exploración se hace únicamente con la tasa de error. Todas salen de la matriz de confusión (figura~\ref{fig:confusion}), tomando como clase positiva la de más de 10 minutos. Las tablas~\ref{tab:final} y~\ref{tab:porclase} indican cómo se calcula cada una.
+Las demás métricas \textbf{solo se calculan para el modelo final}, sobre \texttt{testBin}, y salen de la matriz de confusión (figura~\ref{fig:confusion}), tomando como clase positiva la de más de 10 minutos. Las tablas~\ref{tab:final} y~\ref{tab:porclase} indican cómo se calcula cada una.
 
 \begin{table}[H]
 \centering
@@ -430,7 +428,7 @@ Intervalo de confianza al 95\,\% & $e_S(h) \pm 1{,}96\,\sigma$ & $[0{,}1499;\ 0{
 Tasa de acierto & $(TP + TN)/n$ & 0,8488 \\
 F1 ponderada & media de la F1 de cada clase, ponderada por su tamaño & 0,8489 \\
 Área bajo la curva \acs{ROC} & área bajo los puntos $(fp, tp)$ al variar el umbral & 0,9235 \\
-Área bajo la curva \acs{PR} & área bajo los puntos (recall, precisión) & 0,9363 \\
+Área bajo la curva \ac{PR} & área bajo los puntos (recall, precisión) & 0,9363 \\
 Error del clasificador trivial & proporción de la clase minoritaria (\textit{short}) & 0,4437 \\
 Tasa de no clasificados & (\acs{NTAIE} + \acs{NTOE}) / tamaño de prueba & 1,00\,\% \\
 Error en prueba / tasa de no clasificados & -- & 15,1 \\
@@ -443,7 +441,7 @@ Error en prueba / tasa de no clasificados & -- & 15,1 \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.45\linewidth]{diagramas/matriz_conf.png}
-\caption{Matriz de confusión del modelo final en el conjunto de prueba, con la clase positiva (más de 10 min) primero. El script la imprime en el orden de las etiquetas, con la clase 0 (\textit{short}) primero.}
+\caption{Matriz de confusión del modelo final en el conjunto de prueba, con la clase positiva (más de 10 min) primero. El script la imprime en el orden de las etiquetas, con la clase 0 (\textit{short}) primero. Elaboración propia con draw.io.}
 \label{fig:confusion}
 \end{figure}
 
@@ -463,14 +461,16 @@ $> 10$ min (1) & 0,8679 & 0,8591 & 0,8634 \\
 \label{tab:porclase}
 \end{table}
 
-\paragraph{Curva \acs{ROC}.} Las hojas del árbol no son puras: cada una guarda cuántos viajes de entrenamiento de cada clase acabaron en ella. Su \textit{score} (la columna \texttt{probability}) es la proporción de viajes de más de 10 minutos en la hoja, y todos los viajes que caen en la misma hoja reciben ese mismo \textit{score}. El \textbf{umbral} es el valor a partir del cual se decide la clase: si el \textit{score} lo supera, el árbol predice ``más de 10 min''; si no, \textit{short}. Por defecto es 0,5, la regla de la mayoría, y es el que da todos los resultados anteriores.
+\paragraph{Precisión, recall y F1.} Las dos clases obtienen valores parecidos (entre 0,83 y 0,87), así que el árbol clasifica igual de bien los viajes cortos que los largos. En la de más de 10 minutos, el 86,8\,\% de los viajes que el árbol predice como largos lo son de verdad (precisión) y detecta el 85,9\,\% de los largos reales (recall). Los dos tipos de error están equilibrados (21\,022 falsos positivos y 22\,649 falsos negativos), y la F1 ponderada (0,8489) coincide prácticamente con la tasa de acierto (0,8488), lo que confirma que la tasa de error es un buen resumen del modelo.
 
-Cambiar el umbral no cambia el árbol, que ya está entrenado: solo cambia qué hojas predicen cada clase. Así, un mismo modelo da lugar a una familia de clasificadores, uno por umbral, y cada uno es un punto $(fp, tp)$. La curva \ac{ROC} une esos puntos (figura~\ref{fig:roc}) y sirve para ver todo lo que el modelo puede dar, no solo la regla por defecto: cuántos viajes largos se detectarían y con cuántas falsas alarmas para cada umbral. Con el umbral 0,5, el árbol está en el punto $(0{,}164;\ 0{,}859)$, en el codo de la curva. El área bajo la curva, 0,9235, resume esa capacidad en un solo número que no depende del umbral: en el 92\,\% de las parejas (viaje de más de 10 minutos, viaje \textit{short}), el árbol da mayor \textit{score} al viaje largo.
+\paragraph{Curva \acs{ROC}.} Las hojas del árbol no son puras: el \textit{score} de cada viaje (la columna \texttt{probability}) es la proporción de viajes de más de 10 minutos en su hoja. El \textbf{umbral} decide la clase: si el \textit{score} lo supera, el árbol predice ``más de 10 min''; si no, \textit{short}. Por defecto es 0,5, la regla de la mayoría, y es el que da todos los resultados anteriores.
+
+Cambiar el umbral no cambia el árbol, solo qué hojas predicen cada clase, así que un mismo modelo da un punto $(fp, tp)$ por umbral. La curva \ac{ROC} une esos puntos (figura~\ref{fig:roc}) y muestra todo lo que el modelo puede dar, no solo la regla por defecto, que está en $(0{,}164;\ 0{,}859)$, en el codo de la curva. Su área, 0,9235, resume en un solo número lo bien que el árbol separa los viajes largos de los cortos, sea cual sea el umbral: en el 92\,\% de las parejas (viaje largo, viaje \textit{short}), da más \textit{score} al largo. La curva se dibuja con 20 bins, que agrupan los miles de \textit{scores} del árbol en pocos puntos sin cambiar el área.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.6\linewidth]{diagramas/curva_roc.png}
-\caption{Curva \acs{ROC} del modelo final sobre el conjunto de prueba, construida con los puntos de \texttt{BinaryClassificationMetrics} (MLlib).}
+\caption{Curva \acs{ROC} del modelo final sobre el conjunto de prueba, construida con los puntos de \texttt{BinaryClassificationMetrics} (MLlib). Elaboración propia con Excel.}
 \label{fig:roc}
 \end{figure}
 
@@ -479,38 +479,40 @@ Cambiar el umbral no cambia el árbol, que ya está entrenado: solo cambia qué 
 \section{Conclusiones}
 % =====================================================================
 
-La exploración en dos fases muestra que \texttt{maxDepth} es el parámetro que decide el error: baja de 0,1761 con profundidad 5 a 0,1513 con 14--15 y vuelve a subir a 0,1646 con 20, mientras el error en \texttt{trainSub} sigue bajando (sobreajuste). \texttt{maxBins} apenas influye, con diferencias del orden del margen de ruido. Las consideraciones previas se cumplen. Teniendo en cuenta el margen de ruido, se elige el árbol más sencillo de los empatados, (13, 32), que en prueba da un error de 0,1512 $[0{,}1499;\ 0{,}1525]$, casi tres veces menor que el del clasificador trivial, con un área bajo la curva \ac{ROC} de 0,9235.
+La exploración en dos fases muestra que \texttt{maxDepth} es el parámetro que decide el error: baja de 0,1761 con profundidad 5 a 0,1513 con 14--15 y vuelve a subir a 0,1646 con 20, mientras el error en \texttt{trainSub} sigue bajando (sobreajuste). \texttt{maxBins} apenas influye, con diferencias del orden del margen de ruido, como se esperaba en las consideraciones previas. Teniendo en cuenta el margen de ruido, se elige el árbol más sencillo de los empatados, (13, 32), que en prueba da un error de 0,1512 $[0{,}1499;\ 0{,}1525]$, casi tres veces menor que el del clasificador trivial, con un área bajo la curva \ac{ROC} de 0,9235. Su error en validación (0,1524) cae dentro de ese intervalo, lo que confirma que la estimación de la exploración era fiable.
 
-Se han usado los conjuntos del entregable anterior sin modificar. En su corrección se señaló que algunos criterios de limpieza eran demasiado estrictos (tasa de no clasificados del 1\,\%); se revisarán en el entregable~3, lo que podría cambiar ligeramente estos resultados.
+Se han usado los conjuntos del entregable anterior sin modificar. La tasa de no clasificados (1\,\%) es 15,1 veces menor que el error, por lo que se cumple el requisito del proyecto. Aun así, en su corrección se señaló que algunos criterios de limpieza eran demasiado estrictos; se revisarán en el entregable~3, lo que podría cambiar ligeramente estos resultados.
 
 % =====================================================================
 \section{Tiempo empleado}
 % =====================================================================
-% [Enunciado 4]
- 
+
 \begin{table}[H]
 \centering
 \begin{tabular}{lr}
 \toprule
-Tarea & Horas \\
+Tarea & Horas aproximadas \\
 \midrule
-Estudio de los parámetros del árbol en Spark & \pend{?} \\
-Programación del script & \pend{?} \\
-Ejecuciones de la exploración & \pend{?} \\
-Redacción de la memoria & \pend{?} \\
+Estudio de los parámetros del árbol en Spark & 4,5 \\
+Programación del script & 3,0 \\
+Ejecuciones de la exploración y resolución de problemas de memoria & 3,5 \\
+Análisis de resultados y elección de los parámetros & 4,5 \\
+Redacción de la memoria & 4,5 \\
 \midrule
-\textbf{Total} & \pend{?} \\
+\textbf{Total} & \textbf{20,0} \\
 \bottomrule
 \end{tabular}
 \caption{Tiempo empleado en el entregable.}
 \label{tab:tiempo}
 \end{table}
 
+La parte que más tiempo ha llevado ha sido entender bien el funcionamiento de \texttt{maxBins} y de las métricas de evaluación de Spark, para poder razonar la elección de los valores y no probarlos a ciegas. Las ejecuciones también han requerido más tiempo del previsto: cada ejecución completa tarda unos 30 minutos, y los árboles más profundos agotaron la memoria de la máquina virtual, lo que obligó a reiniciar la sesión, liberar memoria en el script y descartar las combinaciones (20, 32) y (20, 64). Además, elegir los parámetros con el margen de ruido, y no solo por el menor error, ha llevado buena parte del análisis.
+
 \newpage
 \phantomsection
 \addcontentsline{toc}{section}{Referencias}
 \nocite{*}   % muestra todas las entradas del .bib aunque no se citen
-\bibliographystyle{plain}
+\bibliographystyle{unsrt}  % numeradas por orden de aparición en el texto
 \bibliography{referencias}
 
 \end{document}
