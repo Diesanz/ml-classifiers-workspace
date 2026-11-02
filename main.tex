@@ -21,6 +21,7 @@
 \usepackage{longtable}
 \usepackage{listings}
 \usepackage{seqsplit}
+\usepackage[printonlyused]{acronym}  % Acrónimos: se desarrollan solo la primera vez
 
 \addto\captionsspanish{
   \renewcommand{\tablename}{Tabla}
@@ -151,34 +152,18 @@
 \listoftables     % Índice de tablas
 
 % =====================================================================
-% ACRÓNIMOS
+% ACRÓNIMOS: \ac{X} en el texto (la primera vez sale desarrollado y las
+% siguientes solo la sigla); \acs{X} en tablas y pies de figura (solo la sigla)
 % =====================================================================
 \newpage
 \section*{Acrónimos}
-\addcontentsline{toc}{section}{Acrónimos}
 
-\begin{center}
-\begin{tabular}{lp{11.5cm}}
-\toprule
-Acrónimo & Significado \\
-\midrule
-AUC   & Área bajo la curva (\textit{Area Under the Curve}) \\
-FPR   & Tasa de falsos positivos (\textit{False Positive Rate}) \\
-IC    & Intervalo de confianza \\
-ML    & Biblioteca de aprendizaje automático de Spark basada en \textit{DataFrames} (\textit{Machine Learning}) \\
-MLlib & Biblioteca de aprendizaje automático de Spark basada en RDD \\
-NTAIE & Número total de ausentes o inconsistentes eliminados \\
-NTOE  & Número total de \textit{outliers} eliminados \\
-NYC   & Ciudad de Nueva York (\textit{New York City}) \\
-OOM   & Falta de memoria (\textit{Out Of Memory}) \\
-PR    & Precisión--exhaustividad (\textit{Precision--Recall}) \\
-RDD   & Conjunto de datos distribuido resiliente (\textit{Resilient Distributed Dataset}) \\
-ROC   & Característica operativa del receptor (\textit{Receiver Operating Characteristic}) \\
-TLC   & Comisión de Taxis y Limusinas de Nueva York (\textit{Taxi and Limousine Commission}) \\
-TPR   & Tasa de verdaderos positivos (\textit{True Positive Rate}) \\
-\bottomrule
-\end{tabular}
-\end{center}
+\begin{acronym}[NTAIE]
+  \acro{NTAIE}{número total de ausentes o inconsistentes eliminados}
+  \acro{NTOE}{número total de \textit{outliers} eliminados}
+  \acro{PR}{precisión--exhaustividad}
+  \acro{ROC}{característica operativa del receptor}
+\end{acronym}
 
 \newpage
 \section{Introducción}
@@ -194,7 +179,7 @@ Para elegir los parámetros no se usa el conjunto de prueba ni las utilidades de
     \label{fig:division}
 \end{figure}
 
-La limpieza del entregable anterior eliminó 2\,920 filas del conjunto de prueba: 663 por ausentes o inconsistentes (NTAIE) y 2\,257 por \textit{outliers} (NTOE). Como no llegan al clasificador, se cuentan como no clasificadas, y la \textbf{tasa de no clasificados} es (NTAIE + NTOE) / tamaño de prueba = 2\,920 / 291\,789 $\approx$ 1,00\,\%. Según el enunciado del proyecto, debe ser al menos un orden de magnitud menor que la tasa de error del clasificador.
+La limpieza del entregable anterior eliminó 2\,920 filas del conjunto de prueba: 663 por ausentes o inconsistentes y 2\,257 por \textit{outliers}, que son, respectivamente, el \ac{NTAIE} y el \ac{NTOE}. Como no llegan al clasificador, se cuentan como no clasificadas, y la \textbf{tasa de no clasificados} es (\acs{NTAIE} + \acs{NTOE}) / tamaño de prueba = 2\,920 / 291\,789 $\approx$ 1,00\,\%. Según el enunciado del proyecto, debe ser al menos un orden de magnitud menor que la tasa de error del clasificador.
 
 La sección~2 resume el conjunto de datos, la sección~3 recoge el proceso de exploración, desde los conjuntos usados hasta la evaluación del modelo final, la sección~4 presenta las conclusiones y la sección~5 el tiempo empleado.
 
@@ -255,7 +240,11 @@ Clase & Entrenamiento & Prueba \\
 \label{tab:limpios}
 \end{table}
 
-El error de cada árbol es $1 - \text{exactitud}$ sobre validación. El error sobre \texttt{trainSub} (resubstitución) solo se muestra para ver el sobreajuste, y \texttt{testBin} no se usa hasta evaluar el modelo final.
+Cada árbol entrenado con una combinación de parámetros es una \textbf{hipótesis} $h$. Su \textbf{error verdadero} $e_D(h)$, la probabilidad de que clasifique mal un viaje cualquiera, no se puede conocer; se estima con la \textbf{tasa de error} $e_S(h)$ sobre una muestra $S$ que no se haya usado para crearlo~\cite{mitchell1997}:
+\[
+e_S(h) = \frac{r}{n} = 1 - \text{tasa de acierto},
+\]
+donde $n$ es el número de ejemplos de $S$ y $r$ el número de ellos mal clasificados. Durante la exploración, $S$ es el conjunto de \textbf{validación}. El error sobre \texttt{trainSub} (error de resubstitución) se muestra solo para ver el sobreajuste: es optimista, porque el árbol se evalúa con los mismos ejemplos con los que se construyó; como señala Domingos, acertar en el entrenamiento es fácil, basta con memorizar los ejemplos~\cite{domingos2012}. \texttt{testBin} no se usa hasta evaluar el modelo final.
 
 \begin{table}[H]
 \centering
@@ -276,24 +265,37 @@ Conjunto & Uso & Instancias & \textit{short} (0) & $> 10$ min (1) \\
 \label{tab:conjuntos}
 \end{table}
 
-\subsection{Valores considerados e hipótesis}
+\subsection{Valores considerados}
 \label{sec:hipotesis}
-% - maxDepth: 5 (por defecto), 10, 15 y 20 (árbol profundo).
-% - maxBins: 16, 32 (por defecto) y 64. El mínimo válido es 3 (flag_idx con
-%   handleInvalid = keep tiene 3 valores en los metadatos).
-% - El resto de parámetros, por defecto.
- 
-\pend{Por escribir: valores considerados}
- 
-Antes de entrenar ningún árbol se plantean cuatro hipótesis. \textbf{H1:} el error en validación bajará al aumentar \texttt{maxDepth} hasta una profundidad intermedia y después volverá a subir por sobreajuste, mientras que el error en \texttt{trainSub} seguirá bajando. \textbf{H2:} \texttt{maxBins} influirá mucho menos que \texttt{maxDepth}, porque la distancia, el atributo más informativo, ya se divide bien con pocos umbrales, y la hora y el día tienen pocos valores distintos. \textbf{H3:} el número de nodos, el tiempo y la memoria crecerán mucho con la profundidad, por lo que los árboles más profundos podrían no caber en memoria. \textbf{H4:} el error en prueba del modelo final será parecido al de validación y claramente menor que el del clasificador trivial, ya que ambos conjuntos son grandes y siguen la misma distribución.
- 
+
+Solo se modifican \texttt{maxDepth} y \texttt{maxBins}; el resto de parámetros se deja con su valor por defecto~\cite{sparkDT}. Para \texttt{maxDepth} se parte del valor por defecto (5) y se prueban 10 y 15 como profundidades intermedias, y 20 como árbol profundo para comprobar si aparece sobreajuste. Para \texttt{maxBins} se prueban 16, 32 (valor por defecto) y 64, para ver si afinar los cortes de la distancia y las coordenadas mejora el error. El mínimo válido es 3, porque \texttt{flag\_idx} tiene tres valores en los metadatos del \texttt{StringIndexer} (\texttt{handleInvalid = keep}).
+
+Antes de entrenar se parte de estas consideraciones. Al aumentar \texttt{maxDepth}, el error en validación debería bajar hasta una profundidad intermedia y volver a subir por sobreajuste, mientras que el de \texttt{trainSub} seguirá bajando. \texttt{maxBins} debería influir mucho menos, porque la distancia, el atributo más informativo, ya se divide bien con pocos umbrales, y la hora y el día tienen pocos valores distintos. El número de nodos, el tiempo y la memoria crecerán mucho con la profundidad, por lo que los árboles más profundos podrían no caber en memoria. Por último, el error en prueba del modelo final debería parecerse al de validación y ser claramente menor que el del clasificador trivial, que siempre predice la clase mayoritaria.
+
 \subsection{Fase 1: exploración gruesa}
-% - (20,32) y (20,64) se quitaron por falta de memoria (OutOfMemoryError).
-% - Conclusiones: la profundidad manda, los bins apenas influyen y con 20
-%   aparece sobreajuste.
- 
-\pend{Por escribir}
- 
+\label{sec:fase1}
+
+La exploración de los parámetros se ha dividido en dos fases. Probar directamente todas las profundidades con todos los valores de \texttt{maxBins} sería muy costoso, ya que los árboles profundos tardan varios minutos en entrenarse y pueden agotar la memoria. Por eso, primero se hace una búsqueda amplia, con valores separados, para localizar la zona donde está el mínimo, y después una búsqueda más fina, solo en esa zona. Es el mismo procedimiento del ejemplo de Databricks~\cite{databricksDT}, con la diferencia de que aquí cada árbol se evalúa sobre validación y no sobre el conjunto de prueba.
+
+Esta primera fase consiste en localizar en qué zona de profundidad, y con qué valores de \texttt{maxBins}, está el menor error, sin gastar tiempo en combinaciones ajustadas. Se prueba una rejilla de $3 \times 3$, con profundidades 5, 10 y 15 y \texttt{maxBins} 16, 32 y 64, y se añade un árbol más profundo, (20, 16), para comprobar si aparece sobreajuste. En total son 10 combinaciones (tabla~\ref{tab:fase1}). Con profundidad 20 solo se usan 16 bins: en pruebas previas, (20, 64) agotó la memoria de la máquina virtual y (20, 32) tardó más de 7 minutos, y para detectar el sobreajuste basta con un árbol.
+
+\textbf{Análisis de la profundidad.} El error en validación baja con claridad al aumentar la profundidad: de 0,176--0,178 con profundidad 5 pasa a 0,160 con 10 y a 0,151--0,153 con 15. Con 20 vuelve a subir, hasta 0,1646. El error en \texttt{trainSub}, en cambio, baja siempre: 0,175, 0,156, 0,127--0,131 y 0,082. La diferencia entre los dos errores ayuda a entender qué ocurre en cada caso:
+
+\begin{itemize}
+    \item Con \textbf{profundidad 5}, los dos errores son casi iguales (0,1746 en \texttt{trainSub} y 0,1761 en validación) y son los mayores de la exploración: unos 0,025 por encima de los mejores árboles, lo que en validación supone unos 5\,700 viajes más mal clasificados, una diferencia muy superior al margen de ruido. Es un caso de \textbf{subajuste}: el árbol, con 23 nodos (11 preguntas y 12 hojas), es demasiado simple y falla incluso con los datos con los que se ha construido. Al pasar a profundidad 10 bajan los dos errores, lo que confirma que le faltaba capacidad.
+    \item Con \textbf{profundidad 20}, el árbol acierta mucho en \texttt{trainSub} (0,082), pero su error en validación es bastante peor (0,165). Con sus 126\,451 nodos, ha aprendido las particularidades de \texttt{trainSub}, que no se repiten en validación: es sobreajuste.
+    \item Entre medias, con \textbf{profundidad 15}, está el menor error en validación, con una diferencia de unos 0,02 respecto a \texttt{trainSub}.
+    \item Con \textbf{profundidad 10}, los árboles tienen muchos menos nodos (unos 900 frente a unos 22\,000) y se entrenan en unas tres o cuatro veces menos tiempo, pero su error es unos 0,008 mayor que con 15. Como el objetivo es el menor error, manteniendo un equilibrio entre tiempo y error, se sigue buscando por encima de 10.
+\end{itemize}
+
+Esto coincide con la descomposición del error en sesgo y varianza~\cite{domingos2012}: con profundidad 5 domina el sesgo (el árbol se equivoca siempre de la misma forma) y con 20 la varianza (aprende detalles aleatorios de \texttt{trainSub}). Como advierte Domingos, es fácil evitar uno cayendo en el otro, por lo que se busca una profundidad intermedia.
+
+El coste crece muy deprisa con la profundidad: de 23 nodos y 11\,s con profundidad 5 a 126\,451 nodos y 260\,s con 20.
+
+\textbf{Análisis de \texttt{maxBins}.} Para una misma profundidad, cambiar \texttt{maxBins} apenas modifica el error: como mucho 0,0019 con profundidad 5, 0,0016 con 10 y 0,0013 con 15. Son diferencias tan pequeñas como el propio margen de ruido de la estimación del error ($\pm 0{,}0015$, sección~\ref{sec:eleccion}), así que no se puede afirmar que un valor sea mejor que otro. Además, no hay ningún valor que gane siempre: con profundidad 5 gana 16, con 10 gana 32 y con 15 vuelve a ganar 16. En cambio, el verdadero cambio se produce al pasar de la profundidad 5 a la 15, que baja el error unos 0,025. Es decir, en este conjunto de datos el error depende mucho más de la profundidad que de \texttt{maxBins}. Por último, 64 bins no es la mejor opción con ninguna profundidad: con 5 y 10 queda en un punto intermedio entre los otros dos valores, y con 15 da el mayor error de los tres y el entrenamiento más lento (93\,s, frente a 67\,s con 16 bins).
+
+\textbf{Decisión para la fase 2.} El mínimo está entre 10 y 20, alrededor de 15. En la fase 2 se intenta afinar la elección probando las profundidades intermedias que faltan: 12, 13 y 14 (entre 10 y 15), y 16, 17 y 18 (entre 15 y 20). La 15 ya está evaluada, y la 20 se descarta por el sobreajuste que se ha visto. También se descartan los 64 bins, porque no mejoran el error y solo gastan más tiempo y memoria; se mantienen 16 y 32.
+
 \begin{table}[H]
 \centering
 \begin{tabular}{rrrrrr}
@@ -315,14 +317,23 @@ Antes de entrenar ningún árbol se plantean cuatro hipótesis. \textbf{H1:} el 
 \caption{Resultados de la fase 1 (entrenamiento con \texttt{trainSub}, error en validación). En negrita, el menor error en validación.}
 \label{tab:fase1}
 \end{table}
- 
- 
+
+
 \subsection{Fase 2: exploración fina}
-% - Profundidades alrededor del mejor valor: 12, 13, 14, 16, 17 y 18.
-% - Solo bins 16 y 32 (64 no aporta y gasta más memoria).
- 
-\pend{Por escribir}
- 
+\label{sec:fase2}
+
+En esta fase se intenta afinar los parámetros para encontrar el menor error sin caer en el sobreajuste. La fase 1 sitúa el mínimo del error alrededor de la profundidad 15, pero, con saltos de cinco niveles, no permite saber si está justo en 15 o un poco antes o después. Se prueban las seis profundidades nuevas con 16 y 32 bins: 12 combinaciones más, 22 en total entre las dos fases (tabla~\ref{tab:fase2}).
+
+Los resultados confirman lo observado en la fase 1: el error en validación baja al aumentar la profundidad hasta un valor intermedio y vuelve a subir cuando el árbol empieza a sobreajustar (figura~\ref{fig:errorProfundidad}). El error en validación sigue bajando hasta la profundidad 14, donde (14, 32) iguala el mejor resultado de la fase 1 (0,1513), y a partir de la 17 vuelve a subir.
+
+Como se ve en la figura y en la tabla, entre las profundidades 13 y 16 todas las combinaciones tienen un error en validación entre 0,1513 y 0,1529, una diferencia de solo 0,0016.
+
+Lo que sí varía bastante en esta fase es el número de nodos, es decir, el tamaño del árbol, que da un salto importante entre las profundidades 13 y 14: casi se duplica, de los 7\,499 nodos de (13, 32) a los 13\,469 de (14, 32). También se puede ver que, a partir de aquí, el sobreajuste es cada vez mayor: la diferencia entre el error en validación y en \texttt{trainSub} pasa de 0,012 con profundidad 13 a 0,034 con 16 y a 0,060 con 18. Es decir, los árboles son cada vez más grandes y se ajustan más a \texttt{trainSub}, sin clasificar mejor los viajes nuevos.
+
+En cuanto a \texttt{maxBins}, la fase 2 confirma lo que ya se esperaba antes de empezar la exploración (sección~\ref{sec:hipotesis}) y se observó en la fase 1, pero ahora con más claridad: con la misma profundidad, pasar de 16 a 32 bins cambia el error como mucho 0,0009, mientras que pasar de la profundidad 12 a la 14 lo baja unos 0,003, y de la 14 a la 18 lo sube unos 0,005. Cabe destacar que entre profundidades cercanas, como 13 y 14, el error en validación apenas varía; la diferencia se nota más entre profundidades más alejadas.
+
+Con todo lo visto hasta este punto, es momento de tomar una decisión. La exploración deja varias combinaciones posibles con errores casi iguales, así que quedarse sin más con la de menor error no sería un criterio fiable: la diferencia puede deberse al azar de la muestra de validación. Para elegir, en la sección~\ref{sec:eleccion} se calcula el margen de ruido de la estimación del error y se escoge el árbol más sencillo entre los que quedan dentro de él.
+
 \begin{table}[H]
 \centering
 \begin{tabular}{rrrrrr}
@@ -347,108 +358,131 @@ Antes de entrenar ningún árbol se plantean cuatro hipótesis. \textbf{H1:} el 
 \caption{Resultados de la fase 2. En negrita, el menor error en validación; en gris, la combinación elegida.}
 \label{tab:fase2}
 \end{table}
- 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{diagramas/entrenamiento.png}
+    \caption{Error en validación y en \texttt{trainSub} según la profundidad (\texttt{maxBins} = 16), con los resultados de las dos fases.}
+    \label{fig:errorProfundidad}
+\end{figure}
  
 \subsection{Elección de los parámetros}
-% - sigma = sqrt(0,1513 * 0,8487 / 230078) = 0,00075 -> margen 1,96 sigma = 0,0015.
-% - Dentro del margen del mejor (0,1513): profundidades 13 a 16.
-% - Se elige la más simple: (13, 32), con 7499 nodos frente a 13469.
-% - Los bins no deciden: dentro del margen el ganador cambia entre 16 y 32.
- 
-El error en validación del mejor árbol es $e = 0{,}1513$ sobre $n = 230\,078$ instancias, así que
+\label{sec:eleccion}
+
+La tasa de error en validación es solo una estimación del error verdadero de cada árbol, así que dos árboles con errores muy parecidos pueden ser, en realidad, igual de buenos. Para saber qué diferencias son reales se calcula un \textbf{intervalo de confianza}~\cite{mitchell1997}. Cada viaje de validación se trata como un ensayo de Bernoulli (el árbol acierta o falla, con probabilidad de fallo $p = e_D(h)$), y el número de errores sigue una distribución binomial. Si $n \geq 30$ y $n\,p\,(1-p) \geq 5$, la binomial se puede aproximar por una normal, y entonces, con probabilidad $N\,\%$:
 \[
-\sigma = \sqrt{\frac{e(1-e)}{n}} = \sqrt{\frac{0{,}1513 \cdot 0{,}8487}{230\,078}} \approx 0{,}00075,
-\qquad 1{,}96\,\sigma \approx 0{,}0015 .
-\] decir que es un amrgen al m95% ty oq se eluige el 95, poner la tavbla de margenes de losa `puntes
-\pend{Por escribir}
- 
-\subsection{Modelo final y evaluación en prueba}
-% - Se entrena con todo trainBin y maxDepth = 13, maxBins = 32.
-% - Intervalo de confianza del error en test:
-%   sigma = sqrt(0,1512 * 0,8488 / 288869) = 0,00067 -> [0,1499 ; 0,1525].
-% - Comparación con el clasificador trivial (0,4437).
-% - Tasa de no clasificados: 1,00 %; ratio 15,1 >= 10.
-% - Modelo guardado en ./Modelo.
- 
-\pend{Por escribir}
- 
+e_D(h) \in e_S(h) \pm z_N \cdot \sigma, \qquad \sigma \approx \sqrt{\frac{e_S(h)\,\bigl(1 - e_S(h)\bigr)}{n}}
+\]
+donde $n$ es el número de ejemplos de validación, $p$ la probabilidad de error (que se sustituye por su estimación $e_S(h)$), $\sigma$ la desviación estándar de la tasa de error y $z_N$ el valor de la normal estándar para una confianza del $N\,\%$.
+
+Con el mejor árbol, $e_S(h) = 0{,}1513$ y $n = 230\,078$, las dos condiciones se cumplen de sobra ($n\,p\,(1-p) = 230\,078 \cdot 0{,}1513 \cdot 0{,}8487 \approx 29\,544$), y
+\[
+\sigma = \sqrt{\frac{0{,}1513 \cdot 0{,}8487}{230\,078}} \approx 0{,}00075 .
+\]
+
+Si otro árbol tiene un error dentro del margen $\pm z_N \sigma$ del mejor, la diferencia entre ambos puede deberse solo al azar de la muestra de validación, y no se puede afirmar que uno sea mejor que el otro. Por eso, entre todas las combinaciones que caen dentro del margen se elige la \textbf{más sencilla}, la de menos nodos: un árbol más pequeño es más rápido, ocupa menos memoria y tiene menos riesgo de sobreajuste.
+
+La tabla~\ref{tab:margenes} muestra cómo cambia la elección según el nivel de confianza.
+
 \begin{table}[H]
 \centering
-\begin{tabular}{lr}
+\small
+\begin{tabular}{crccp{4.2cm}}
 \toprule
-Medida & Valor \\
+Confianza & $z_N$ & Margen $z_N\sigma$ & Error máximo & Más sencilla dentro del margen \\
 \midrule
-\texttt{maxDepth} / \texttt{maxBins} & 13 / 32 \\
-Número de nodos & 7\,429 \\
-Error en entrenamiento completo (\texttt{trainBin}) & 0,1425 \\
-Error en prueba (\texttt{testBin}) & 0,1512 \\
-Intervalo de confianza al 95\,\% & $[0{,}1499;\ 0{,}1525]$ \\
-Exactitud (\textit{accuracy}) & 0,8488 \\
-F1 ponderada & 0,8489 \\
-Área bajo la curva ROC & 0,9235 \\
-Área bajo la curva PR & 0,9363 \\
-Error del clasificador trivial & 0,4437 \\
-Tasa de no clasificados & 1,00\,\% \\
-Error en prueba / tasa de no clasificados & 15,1 \\
+90\,\% & 1,645 & $\pm 0{,}0012$ & 0,1525 & (13, 32): 7\,499 nodos \\
+\rowcolor{gray!15}
+95\,\% & 1,96  & $\pm 0{,}0015$ & 0,1528 & (13, 32): 7\,499 nodos \\
+99\,\% & 2,58  & $\pm 0{,}0019$ & 0,1532 & (13, 16): 6\,845 nodos \\
 \bottomrule
 \end{tabular}
-\caption{Resultados del modelo final.}
+\caption{Margen de ruido alrededor del mejor error en validación (0,1513) para distintos niveles de confianza.}
+\label{tab:margenes}
+\end{table}
+
+Se usa una confianza del \textbf{95\,\%} porque equilibra los dos errores posibles al comparar árboles. Con menos confianza (90\,\%), el margen es más estrecho y aumenta el riesgo de considerar real una diferencia que solo es azar (1 de cada 10 veces), lo que llevaría a elegir árboles más complejos sin motivo. Con más confianza (99\,\%), el margen es más ancho y aumenta el riesgo de dar por empatados árboles que sí son distintos. Además, la elección es estable: la profundidad elegida es 13 con los tres niveles, y solo cambia \texttt{maxBins} al 99\,\%, un parámetro que, como se ha visto, apenas influye.
+
+Al 95\,\%, quedan dentro del margen (error $\leq 0{,}1528$) la combinación (13, 32), las profundidades 14, 15 y 16 con 16 y 32 bins, y (15, 64). Se elige \textbf{\texttt{maxDepth} = 13 y \texttt{maxBins} = 32}: tiene 7\,499 nodos, un 44\,\% menos que (14, 32) y un 65\,\% menos que (15, 16), las dos con el menor error (0,1513), y es la de menor diferencia entre el error en validación y en \texttt{trainSub} (0,012), es decir, la que menos sobreajusta. Con la misma profundidad, cambiar \texttt{maxBins} mueve el error en validación como mucho 0,002, del orden del margen de ruido, por lo que se deja su valor por defecto (32).
+
+\subsection{Modelo final y evaluación en prueba}
+
+El modelo final se entrena con todo \texttt{trainBin}, con \texttt{maxDepth} = 13, \texttt{maxBins} = 32 y el resto de parámetros por defecto, y se guarda en el directorio \texttt{./Modelo}. Se evalúa \textbf{una única vez} sobre \texttt{testBin}, que no ha intervenido en ninguna decisión, por lo que su tasa de error es una estimación honesta del error verdadero. Además, como el modelo final se entrena con más datos que los árboles de la exploración, el error estimado tiende a ser pesimista y no optimista, que es lo que se busca: las estimaciones optimistas no son admisibles. El error de resubstitución en \texttt{trainBin} (0,1425) sí es optimista, y se muestra solo como referencia.
+
+Con $e_S(h) = 0{,}1512$ y $n = 288\,869$, $\sigma \approx 0{,}00067$, y el intervalo de confianza al 95\,\% es $0{,}1512 \pm 1{,}96 \cdot 0{,}00067 = [0{,}1499;\ 0{,}1525]$. El error en validación del árbol elegido (0,1524) cae dentro de este intervalo, así que la estimación de la exploración era fiable. El error es casi tres veces menor que el del clasificador trivial (0,4437), que siempre predice la clase mayoritaria.
+
+\paragraph{Tasa de no clasificados.} La limpieza del entregable anterior eliminó 2\,920 viajes del conjunto de prueba original (291\,789): 663 por ausentes o inconsistentes (\ac{NTAIE}) y 2\,257 por \textit{outliers} de duración (\ac{NTOE}). Esos viajes nunca llegan al árbol, así que no se pueden contar como aciertos ni como errores: son no clasificados, y su tasa es $2\,920 / 291\,789 = 1{,}00\,\%$. El proyecto exige que sea al menos un orden de magnitud menor que la tasa de error, es decir, que el error sea como mínimo diez veces mayor. Se cumple: $0{,}1512 / 0{,}0100 = 15{,}1$. En la práctica, esto significa que los viajes eliminados no pueden cambiar la conclusión: si todos se hubieran clasificado bien, el error sobre el conjunto de prueba original sería $43\,671 / 291\,789 = 0{,}1497$, y si todos se hubieran clasificado mal, $(43\,671 + 2\,920) / 291\,789 = 0{,}1597$. En cualquier caso, el error sigue en torno al 15\,\%.
+
+Las demás métricas, como la matriz de confusión, la precisión, el recall, la F1 y las áreas bajo las curvas \ac{ROC} y \ac{PR}, \textbf{solo se calculan para el modelo final}, sobre \texttt{testBin}: la exploración se hace únicamente con la tasa de error. Todas salen de la matriz de confusión (figura~\ref{fig:confusion}), tomando como clase positiva la de más de 10 minutos. Las tablas~\ref{tab:final} y~\ref{tab:porclase} indican cómo se calcula cada una.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4.6cm}p{6cm}r}
+\toprule
+Medida & Cálculo & Valor \\
+\midrule
+\texttt{maxDepth} / \texttt{maxBins} & -- & 13 / 32 \\
+Número de nodos & -- & 7\,429 \\
+Error en \texttt{trainBin} (resubstitución) & $(FP + FN)/n$ sobre \texttt{trainBin} & 0,1425 \\
+Error en prueba $e_S(h)$ & $(FP + FN)/n$ & 0,1512 \\
+Intervalo de confianza al 95\,\% & $e_S(h) \pm 1{,}96\,\sigma$ & $[0{,}1499;\ 0{,}1525]$ \\
+Tasa de acierto & $(TP + TN)/n$ & 0,8488 \\
+F1 ponderada & media de la F1 de cada clase, ponderada por su tamaño & 0,8489 \\
+Área bajo la curva \acs{ROC} & área bajo los puntos $(fp, tp)$ al variar el umbral & 0,9235 \\
+Área bajo la curva \acs{PR} & área bajo los puntos (recall, precisión) & 0,9363 \\
+Error del clasificador trivial & proporción de la clase minoritaria (\textit{short}) & 0,4437 \\
+Tasa de no clasificados & (\acs{NTAIE} + \acs{NTOE}) / tamaño de prueba & 1,00\,\% \\
+Error en prueba / tasa de no clasificados & -- & 15,1 \\
+\bottomrule
+\end{tabular}
+\caption{Resultados del modelo final ($n = 288\,869$ viajes de prueba).}
 \label{tab:final}
 \end{table}
- 
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.45\linewidth]{diagramas/matriz_conf.png}
+\caption{Matriz de confusión del modelo final en el conjunto de prueba, con la clase positiva (más de 10 min) primero. El script la imprime en el orden de las etiquetas, con la clase 0 (\textit{short}) primero.}
+\label{fig:confusion}
+\end{figure}
+
 \begin{table}[H]
 \centering
-\begin{tabular}{lrr}
-\toprule
- & Predicho \textit{short} & Predicho $> 10$ min \\
-\midrule
-Real \textit{short} & 107\,135 & 21\,022 \\
-Real $> 10$ min & 22\,649 & 138\,063 \\
-\bottomrule
-\end{tabular}
-\caption{Matriz de confusión en el conjunto de prueba.}
-\label{tab:confusion}
-\end{table}
- 
-\begin{table}[H]
-\centering
+\small
 \begin{tabular}{lrrr}
 \toprule
 Clase & Precisión & Recall & F1 \\
+ & $\frac{TP}{TP + FP}$ & $\frac{TP}{TP + FN}$ & $\frac{2 \cdot \text{precisión} \cdot \text{recall}}{\text{precisión} + \text{recall}}$ \\
 \midrule
-\textit{short} (0) & 0,8255 & 0,8360 & 0,8307 \\
 $> 10$ min (1) & 0,8679 & 0,8591 & 0,8634 \\
+\textit{short} (0) & 0,8255 & 0,8360 & 0,8307 \\
 \bottomrule
 \end{tabular}
-\caption{Medidas por clase en el conjunto de prueba.}
+\caption{Medidas por clase en el conjunto de prueba. Para la clase \textit{short}, las fórmulas se aplican tomándola como positiva (sus aciertos son los TN). El recall de la clase 1 es la tasa de ciertos positivos, $tp$, y $1 -$ recall de la clase 0 es la tasa de falsos positivos, $fp = 0{,}1640$.}
 \label{tab:porclase}
 \end{table}
- 
+
+\paragraph{Curva \acs{ROC}.} Las hojas del árbol no son puras: cada una guarda cuántos viajes de entrenamiento de cada clase acabaron en ella. Su \textit{score} (la columna \texttt{probability}) es la proporción de viajes de más de 10 minutos en la hoja, y todos los viajes que caen en la misma hoja reciben ese mismo \textit{score}. El \textbf{umbral} es el valor a partir del cual se decide la clase: si el \textit{score} lo supera, el árbol predice ``más de 10 min''; si no, \textit{short}. Por defecto es 0,5, la regla de la mayoría, y es el que da todos los resultados anteriores.
+
+Cambiar el umbral no cambia el árbol, que ya está entrenado: solo cambia qué hojas predicen cada clase. Así, un mismo modelo da lugar a una familia de clasificadores, uno por umbral, y cada uno es un punto $(fp, tp)$. La curva \ac{ROC} une esos puntos (figura~\ref{fig:roc}) y sirve para ver todo lo que el modelo puede dar, no solo la regla por defecto: cuántos viajes largos se detectarían y con cuántas falsas alarmas para cada umbral. Con el umbral 0,5, el árbol está en el punto $(0{,}164;\ 0{,}859)$, en el codo de la curva. El área bajo la curva, 0,9235, resume esa capacidad en un solo número que no depende del umbral: en el 92\,\% de las parejas (viaje de más de 10 minutos, viaje \textit{short}), el árbol da mayor \textit{score} al viaje largo.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\linewidth]{diagramas/curva_roc.png}
+\caption{Curva \acs{ROC} del modelo final sobre el conjunto de prueba, construida con los puntos de \texttt{BinaryClassificationMetrics} (MLlib).}
+\label{fig:roc}
+\end{figure}
+
+\clearpage
 % =====================================================================
 \section{Conclusiones}
 % =====================================================================
-% Incluir la frase: se han usado los conjuntos del entregable 1 sin modificar;
-% en su corrección se señaló que algunos criterios de limpieza eran demasiado
-% estrictos y se revisarán en el entregable 3.
- 
-\pend{Por escribir}
- 
-\begin{table}[H]
-\centering
-\begin{tabular}{clp{8.5cm}}
-\toprule
-Hipótesis & ¿Se cumple? & Evidencia \\
-\midrule
-H1 & Sí & El error en validación baja de 0,1761 (profundidad 5) a 0,1513 (14--15) y sube a 0,1646 con 20; el de \texttt{trainSub} baja siempre, hasta 0,0820. \\
-H2 & Sí & Con la misma profundidad, cambiar \texttt{maxBins} mueve el error como mucho 0,002, del orden del margen de 0,0015. \\
-H3 & Sí & De 23 nodos y 11\,s (profundidad 5) a 126\,451 nodos y 260\,s (profundidad 20); (20,\,32) y (20,\,64) se quedaron sin memoria. \\
-H4 & Sí & Error en validación 0,1524 y en prueba 0,1512, frente a 0,4437 del clasificador trivial. \\
-\bottomrule
-\end{tabular}
-\caption{Comprobación de las hipótesis de la sección~\ref{sec:hipotesis}.}
-\label{tab:hipotesis}
-\end{table}
- 
+
+La exploración en dos fases muestra que \texttt{maxDepth} es el parámetro que decide el error: baja de 0,1761 con profundidad 5 a 0,1513 con 14--15 y vuelve a subir a 0,1646 con 20, mientras el error en \texttt{trainSub} sigue bajando (sobreajuste). \texttt{maxBins} apenas influye, con diferencias del orden del margen de ruido. Las consideraciones previas se cumplen. Teniendo en cuenta el margen de ruido, se elige el árbol más sencillo de los empatados, (13, 32), que en prueba da un error de 0,1512 $[0{,}1499;\ 0{,}1525]$, casi tres veces menor que el del clasificador trivial, con un área bajo la curva \ac{ROC} de 0,9235.
+
+Se han usado los conjuntos del entregable anterior sin modificar. En su corrección se señaló que algunos criterios de limpieza eran demasiado estrictos (tasa de no clasificados del 1\,\%); se revisarán en el entregable~3, lo que podría cambiar ligeramente estos resultados.
+
 % =====================================================================
 \section{Tiempo empleado}
 % =====================================================================
