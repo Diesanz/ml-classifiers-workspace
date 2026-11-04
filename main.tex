@@ -154,10 +154,14 @@
 \section*{Acrónimos}
 
 \begin{acronym}[NTAIE]
+  \acro{FN}{falso negativo}
+  \acro{FP}{falso positivo}
   \acro{NTAIE}{número total de ausentes o inconsistentes eliminados}
   \acro{NTOE}{número total de \textit{outliers} eliminados}
   \acro{PR}{precisión--exhaustividad}
   \acro{ROC}{característica operativa del receptor}
+  \acro{TN}{verdadero negativo}
+  \acro{TP}{verdadero positivo}
 \end{acronym}
 
 \newpage
@@ -418,10 +422,10 @@ Medida & Cálculo & Valor \\
 \midrule
 \texttt{maxDepth} / \texttt{maxBins} & -- & 13 / 32 \\
 Número de nodos & -- & 7\,429 \\
-Error en \texttt{trainBin} (resubstitución) & $(FP + FN)/n$, con $n = 1\,155\,830$ & 0,1425 \\
-Error en prueba $e_S(h)$ & $(FP + FN)/n$, con $n = 288\,869$ & 0,1512 \\
+Error en \texttt{trainBin} (resubstitución) & $(\acs{FP} + \acs{FN})/n$, con $n = 1\,155\,830$ & 0,1425 \\
+Error en prueba $e_S(h)$ & $(\acs{FP} + \acs{FN})/n$, con $n = 288\,869$ & 0,1512 \\
 Intervalo de confianza al 95\,\% & $e_S(h) \pm 1{,}96\,\sigma$ & $[0{,}1499;\ 0{,}1525]$ \\
-Tasa de acierto & $(TP + TN)/n$ & 0,8488 \\
+Tasa de acierto & $(\acs{TP} + \acs{TN})/n$ & 0,8488 \\
 F1 ponderada & media de la F1 de cada clase, ponderada por su tamaño & 0,8489 \\
 Área bajo la curva \acs{ROC} & área bajo los puntos $(fp, tp)$ al variar el umbral & 0,9235 \\
 Área bajo la curva \ac{PR} & área bajo los puntos (recall, precisión) & 0,9363 \\
@@ -447,13 +451,13 @@ Error en prueba / tasa de no clasificados & -- & 15,1 \\
 \begin{tabular}{lrrr}
 \toprule
 Clase & Precisión & Recall & F1 \\
- & $\frac{TP}{TP + FP}$ & $\frac{TP}{TP + FN}$ & $\frac{2 \cdot \text{precisión} \cdot \text{recall}}{\text{precisión} + \text{recall}}$ \\
+ & $\frac{\acs{TP}}{\acs{TP} + \acs{FP}}$ & $\frac{\acs{TP}}{\acs{TP} + \acs{FN}}$ & $\frac{2 \cdot \text{precisión} \cdot \text{recall}}{\text{precisión} + \text{recall}}$ \\
 \midrule
 $> 10$ min (1) & 0,8679 & 0,8591 & 0,8634 \\
 \textit{short} (0) & 0,8255 & 0,8360 & 0,8307 \\
 \bottomrule
 \end{tabular}
-\caption{Medidas por clase en el conjunto de prueba. Para la clase \textit{short}, las fórmulas se aplican tomándola como positiva (sus aciertos son los TN). El recall de la clase 1 es la tasa de ciertos positivos, $tp$, y $1 -$ recall de la clase 0 es la tasa de falsos positivos, $fp = 0{,}1640$.}
+\caption{Medidas por clase en el conjunto de prueba. Para la clase \textit{short}, las fórmulas se aplican tomándola como positiva (sus aciertos son los \acs{TN}). El recall de la clase 1 es la tasa de verdaderos positivos, $tp$, y $1 -$ recall de la clase 0 es la tasa de falsos positivos, $fp = 0{,}1640$.}
 \label{tab:porclase}
 \end{table}
 
