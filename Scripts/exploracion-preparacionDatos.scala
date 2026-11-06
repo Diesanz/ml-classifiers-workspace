@@ -3,6 +3,13 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{StructType, StructField, StringType,
   DoubleType, LongType, IntegerType, TimestampType}
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
+import org.apache.spark.ml.classification.DecisionTreeClassifier
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
+import org.apache.spark.ml.linalg.Vector
+import org.apache.spark.mllib.evaluation.MulticlassMetrics
+import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
+
 
 // Ruta completa al fichero (cambiar en base a donde se tenga el .csv)
 var PATH = "./train.csv"
@@ -39,11 +46,11 @@ println("Primeras 5 filas:")
 rawTaxiDF.show(5, truncate = false)
 
 
-// Paso 2: eliminar registros vacíos (algún nulo) y no validos
+// Paso 2: eliminar registros vacíos (algún nulo) y no válidos
 println("\nPaso 2: eliminando registros vacíos y no válidos (nulos y duplicados)")
 
 val taxiDF = rawTaxiDF.na.drop().dropDuplicates().cache()
-println(s"Registros vacíos o no validos eliminados: ${rawTaxiDF.count() - taxiDF.count()}")   // esperado: 0
+println(s"Registros vacíos o no válidos eliminados: ${rawTaxiDF.count() - taxiDF.count()}")   // esperado: 0
 
 
 // Paso 3: crear la clase (short / medium / long) a partir de trip_duration
@@ -90,52 +97,44 @@ test.groupBy("trip_class").count().
 // Se aplica la misma función a train y a test. En test, las filas eliminadas
 // son los no clasificados (NTAIE + NTOE).
 //
+// Criterio revisado tras la corrección del primer entregable ("varios criterios hard,
+// 1 % es mucho"): solo se eliminan los registros imposibles. Lo raro pero posible se
+// mantiene, porque son viajes reales y el modelo tiene que saber clasificarlos.
+//
 // Inconsistentes (NTAIE):
-//  - passenger_count fuera de [1, 6]: 0 y 7-9 no son valores válidos
 //  - coordenadas de recogida o destino fuera del rectángulo amplio
-//    lat [40.0, 41.5], lon [-74.8, -73.0]: imposibles para un taxi de NYC.
-//    Es amplio a propósito para no eliminar viajes reales a Newark o
-//    Long Island (901 de los 1.329 destinos fuera del rectángulo ajustado son long)
-//  - distancia 0 km y duración > 5 min: contradice la variable más predictiva
-//    (los 0 km de <= 5 min se mantienen, son coherentes con short)
+//    lat [40.0, 41.5], lon [-74.8, -73.0]: imposibles para un taxi de NYC
+//    (49 viajes en el conjunto completo).
+//    Es amplio a propósito para no eliminar viajes reales fuera de la ciudad
+//    (901 de los 1.329 destinos fuera del rectángulo ajustado son long)
+//  - Ya no se eliminan:
+//    - passenger_count 0 o 7-9: pueden ser envíos de paquetes o vehículos grandes
+//    - 0 km y duración > 5 min: pueden ser atascos o un destino mal registrado
 //
 // Outliers de duración (NTOE):
-//  - trip_duration < 60 s: un viaje real de menos de 1 min es implausible
-//  - trip_duration > 3 h: de los 2.112, 1.843 superan las 23 h (artefacto,
-//    p. ej. taxímetro sin apagar); entre 2 y 3 h hay solo ~141 viajes
-//
-// Notas:
-//  - distance_km supone que el destino se conoce al inicio del viaje
+//  - trip_duration > 23 h: pico aislado en ~24 h (artefacto, p. ej. taxímetro sin apagar;
+//    1.843 en el conjunto completo)
+//  - Ya no se eliminan:
+//    - trip_duration < 60 s: su clase (short) es coherente y no hay salto en la distribución
+//    - trip_duration entre 3 y 23 h (269 en el conjunto completo): son long y es el
+//      final normal de la distribución
 
 println("\nPaso 5: limpieza (misma función para train y test)")
 
 
-// Distancia haversine en km entre dos puntos (lat/lon en grados)
-def distanceKm(lat1: Column, lon1: Column, lat2: Column, lon2: Column): Column = {
-  // mide lo separados que están los dos puntos sobre una esfera
-  val a = pow(sin(radians(lat2 - lat1) / 2), 2) +
-          cos(radians(lat1)) * cos(radians(lat2)) *
-          pow(sin(radians(lon2 - lon1) / 2), 2)
-  // pasa el valor a kilómetros
-  lit(2 * 6371.0) * asin(sqrt(a))
-}
-
 // Criterios de limpieza, definidos una sola vez: los usan clean() y el desglose de NTAIE / NTOE
-val dist = distanceKm(col("pickup_latitude"), col("pickup_longitude"),
-                      col("dropoff_latitude"), col("dropoff_longitude"))
+// (ya no hace falta la distancia: el criterio de 0 km se ha quitado)
 
-// Una fila es inconsistente (NTAIE) si cumple alguna de estas condiciones
+// Una fila es inconsistente (NTAIE) si alguna coordenada cae fuera del rectángulo amplio
 val inconsistent = (
-  !col("passenger_count").between(1, 6) ||
   !col("pickup_latitude").between(40.0, 41.5) ||
   !col("dropoff_latitude").between(40.0, 41.5) ||
   !col("pickup_longitude").between(-74.8, -73.0) ||
-  !col("dropoff_longitude").between(-74.8, -73.0) ||
-  (dist === 0.0 && col("trip_duration") > 300)
+  !col("dropoff_longitude").between(-74.8, -73.0)
 )
 
-// Una fila es outlier de duración (NTOE) si dura menos de 60 s o más de 3 h (10800 s)
-val outlier = !col("trip_duration").between(60, 10800)
+// Una fila es outlier de duración (NTOE) si dura más de 23 h (82800 s)
+val outlier = col("trip_duration") > 82800
 
 // Se queda solo con las filas válidas (las que no son inconsistentes ni outliers)
 def clean(df: DataFrame): DataFrame = {
@@ -152,9 +151,8 @@ val removedTrain = nTrain - nTrainClean
 val unclassified = nTest - nTestClean   // NTAIE + NTOE
 
 // Desglose de NTAIE y NTOE en test (el enunciado pide contar cada causa)
-//  - NTAIE: filas eliminadas por inconsistentes (pasajeros fuera de 1-6, coordenadas
-//    fuera del rectángulo amplio o 0 km con duración > 5 min)
-//  - NTOE: filas eliminadas solo por duración (< 60 s o > 3 h)
+//  - NTAIE: filas eliminadas por inconsistentes (coordenadas fuera del rectángulo amplio)
+//  - NTOE: filas eliminadas solo por duración (> 23 h)
 //  - Si una fila cumple criterios de las dos causas, cuenta en NTAIE (así no se cuenta dos veces)
 //  - NTAIE + NTOE = unclassified, y la tasa de no clasificados es unclassified / nTest
 val ntaie = test.filter(inconsistent).count()
@@ -176,23 +174,44 @@ testClean.groupBy("trip_class").count().
 
 // Paso 6: construir atributos y eliminar los que no se usan
 //  - Se construyen: distance_km, pickup_hour, pickup_day
+//  - distance_km se calcula ahora con la distancia Manhattan en vez de la haversine:
+//    se parece más al recorrido real por las calles (correlación con la duración
+//    0,809 frente a 0,794). Se mantiene el nombre del atributo
 //  - Se eliminan: id (identificador), dropoff_datetime (fuga de información),
 //    vendor_id (reparto de clases casi igual al global), trip_duration (solo
-//    servía para crear la clase) y pickup_datetime (ya extraída hora y día)
+//    servía para crear la clase), pickup_datetime (ya extraída hora y día) y
+//    store_and_fwd_flag (solo afecta al 0,55 % de los viajes y no describe el viaje)
 //  - pickup_longitude/latitude y dropoff_* se mantienen como candidatas
 //  - El mes se descarta: el dataset solo cubre 6 meses y no generaliza
+//  - distance_km supone que el destino se conoce al inicio del viaje
 
 println("\nPaso 6: construcción y selección de atributos")
+
+// Distancia Manhattan en km entre dos puntos (lat/lon en grados).
+// Las calles de Manhattan forman una cuadrícula girada unos 29° respecto al norte:
+// se proyecta el desplazamiento sobre las avenidas y sobre las calles y se suman los dos
+val anguloCuadricula = math.toRadians(29)
+val kmPorGradoLat = 110.574
+val kmPorGradoLon = 111.320 * math.cos(math.toRadians(40.75))   // en la latitud de NYC
+
+def manhattanKm(lat1: Column, lon1: Column, lat2: Column, lon2: Column): Column = {
+  val dx = (lon2 - lon1) * kmPorGradoLon   // km hacia el este
+  val dy = (lat2 - lat1) * kmPorGradoLat   // km hacia el norte
+  val porAvenidas = dx * math.sin(anguloCuadricula) + dy * math.cos(anguloCuadricula)
+  val porCalles   = dx * math.cos(anguloCuadricula) - dy * math.sin(anguloCuadricula)
+  abs(porAvenidas) + abs(porCalles)
+}
 
 // Añade los atributos nuevos: distancia, hora y día de la semana de la recogida.
 // Va antes del drop porque necesita las coordenadas y pickup_datetime
 def buildFeatures(df: DataFrame): DataFrame =
-  df.withColumn("distance_km", distanceKm(col("pickup_latitude"), col("pickup_longitude"),
-                                          col("dropoff_latitude"), col("dropoff_longitude"))).
+  df.withColumn("distance_km", manhattanKm(col("pickup_latitude"), col("pickup_longitude"),
+                                           col("dropoff_latitude"), col("dropoff_longitude"))).
     withColumn("pickup_hour", hour(col("pickup_datetime"))).
     withColumn("pickup_day", dayofweek(col("pickup_datetime")))
 
-val unusedCols = Seq("id", "dropoff_datetime", "vendor_id", "trip_duration", "pickup_datetime")
+val unusedCols = Seq("id", "dropoff_datetime", "vendor_id", "trip_duration", "pickup_datetime",
+                     "store_and_fwd_flag")
 
 // Construye los atributos y después quita las columnas que no se usan (el número de filas no cambia)
 def selectFeatures(df: DataFrame): DataFrame =
@@ -207,17 +226,11 @@ trainSel.printSchema()
 
 
 // Paso 7: transformación (features y label)
-// Los indexers son estimators: se ajustan (fit) SOLO con train y se aplican
-// a train y a test. Ajustarlos con test sería fuga de información 
+// El indexer es un estimator: se ajusta (fit) SOLO con train y se aplica
+// a train y a test. Ajustarlo con test sería fuga de información
+// (ya no hay indexer del flag: store_and_fwd_flag se elimina en el paso 6)
 
 println("\nPaso 7: transformación de atributos (features y label)")
-
-// StringIndexer: convierte el texto del flag (N / Y) en un número
-val flagIndexer = new StringIndexer().
-  setInputCol("store_and_fwd_flag").
-  setOutputCol("flag_idx").
-  setHandleInvalid("keep").
-  fit(trainSel)
 
 // Convierte la clase (short / medium / long) en la etiqueta numérica 0, 1, 2 (por frecuencia en train)
 val labelIndexer = new StringIndexer().
@@ -225,8 +238,8 @@ val labelIndexer = new StringIndexer().
   setOutputCol("label").
   fit(trainSel)
 
-// Todos los atributos salvo la etiqueta y el flag en texto (se usa su versión numérica)
-val featureCols = trainSel.columns.diff(Array("trip_class", "store_and_fwd_flag")) :+ "flag_idx"
+// Todos los atributos salvo la etiqueta
+val featureCols = trainSel.columns.diff(Array("trip_class"))
 println("Atributos que entran en features: " + featureCols.mkString(", "))
 
 // El assembler es un transformer: solo junta las columnas en un vector
@@ -237,8 +250,7 @@ val assembler = new VectorAssembler().
 // Aplica las mismas transformaciones (ya ajustadas con train) a cualquier DataFrame
 // y deja solo las dos columnas que necesita el clasificador: features y label
 def transformPipeline(df: DataFrame): DataFrame = {
-  val withFlag  = flagIndexer.transform(df)
-  val withLabel = labelIndexer.transform(withFlag)
+  val withLabel = labelIndexer.transform(df)
   assembler.transform(withLabel).select("features", "label")
 }
 
@@ -250,8 +262,6 @@ trainFinal.show(5, truncate = false)
 println(s"Train final: ${trainFinal.count()}  Test final: ${testFinal.count()}")
 println("Correspondencia clase -> label:")
 labelIndexer.labelsArray(0).zipWithIndex.foreach { case (c, i) => println(s"  $c -> $i") }
-println("Correspondencia flag -> índice:")
-flagIndexer.labelsArray(0).zipWithIndex.foreach { case (c, i) => println(s"  $c -> $i") }
 
 // Opcional: guardar los conjuntos transformados (parquet, porque features es un vector)
 //trainFinal.write.mode("overwrite").parquet("output/train")
