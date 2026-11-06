@@ -1,7 +1,6 @@
 \documentclass[12pt,a4paper]{article}
 
 % --- Paquetes básicos ---
-\usepackage[spanish, es-tabla]{babel}
 \usepackage[utf8]{inputenc}     % Acentos
 \usepackage[T1]{fontenc}
 \usepackage[spanish,es-tabla]{babel}     % Idioma
@@ -9,7 +8,7 @@
 \usepackage{graphicx}           % Imágenes
 \usepackage{float}              % Posición exacta de figuras
 \usepackage{hyperref}           % Hipervínculos
-\usepackage{xcolor}             % Colores
+\usepackage[table]{xcolor}      % Colores (con table para \rowcolor)
 \usepackage{fancyhdr}           % Encabezados y pies de página
 \usepackage{titlesec}           % Formato de títulos
 \usepackage{listingsutf8}       % Soporte UTF-8 en listing
@@ -17,16 +16,18 @@
 \usepackage{caption}            % Personalizar captions
 \usepackage{amsmath, amssymb}   % Símbolos matemáticos
 \usepackage{booktabs}           % Tablas elegantes
-\usepackage{listings}           % Código
 \usepackage{longtable}
-\usepackage[table]{xcolor}
-\usepackage{listings}
-\usepackage{xcolor}
 \usepackage{seqsplit}
+\usepackage[printonlyused]{acronym}  % Acrónimos: se desarrollan solo la primera vez
 
 \addto\captionsspanish{
   \renewcommand{\tablename}{Tabla}
+  \renewcommand{\contentsname}{Tabla de contenidos}
 }
+
+% Cambios respecto al entregable 1 (el enunciado pide resaltarlos claramente).
+% Uso: \cambio{texto modificado}. Sale en azul en el PDF.
+\newcommand{\cambio}[1]{\textcolor{blue}{#1}}
 
 % --- Configuración de códigos ---
 \lstset{
@@ -41,20 +42,6 @@
     {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
     {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
     {ñ}{{\~n}}1 {Ñ}{{\~N}}1
-}
-
-% Estilo para Bash
-\lstdefinestyle{miEstiloBash}{
-    language=bash,
-    basicstyle=\small\ttfamily,
-    backgroundcolor=\color{gray!10},
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{green!60!black},
-    stringstyle=\color{red},
-    showstringspaces=false,
-    frame=single,
-    breaklines=true,
-    captionpos=b
 }
 
 % Estilo para Scala
@@ -72,28 +59,15 @@
     morekeywords={val, var, def, class, object, trait, extends, with, match, case, new, if, else, for, while, return, type, import, package}
 }
 
-% Estilo para Java
-\lstdefinestyle{miEstiloJava}{
-    language=Java,
-    basicstyle=\small\ttfamily,
-    backgroundcolor=\color{gray!5},
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{green!60!black}\itshape,
-    stringstyle=\color{red},
-    showstringspaces=false,
-    frame=single,
-    breaklines=true,
-    captionpos=b
-}
-
 % --- Configuración de márgenes ---
 \geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm}
 
 % --- Configuración de hipervínculos ---
 \hypersetup{
     colorlinks=true,
-    linkcolor=blue,
-    urlcolor=cyan
+    linkcolor=black,   % índices y referencias a secciones, tablas y figuras
+    citecolor=black,   % citas [1], [2]...
+    urlcolor=cyan      % enlaces web
 }
 
 % --- Encabezados y pies de página ---
@@ -104,12 +78,11 @@
 \fancyfoot[C]{\thepage}
 
 % --- Formato de títulos ---
-\titleformat{\chapter}[hang]{\bfseries\huge}{\thechapter.}{1em}{}
 \titleformat{\section}[hang]{\bfseries\Large}{\thesection}{1em}{}
 
 % -- Información para la portada
-\title{\LARGE \textbf{Proyecto de Clasificación: Segunda Etapa}\\ [0.3cm]
-\large \textbf{Creación, selección y evaluación de modelos }}
+\title{\LARGE \textbf{Proyecto de Clasificación: Tercera Etapa}\\[0.3cm]
+\large \textbf{Creación, selección y evaluación de modelos}}
 \author{{\large \textbf{Autores:}}\\[0.10cm]
     Gonzalo Agúndez Sáez \\
     Paula Negro Asegurado \\
@@ -126,16 +99,17 @@
 
 \begin{titlepage}
     \centering
-    \vspace*{1.5cm}
-    \includegraphics[width=0.7\textwidth]{logoInfo.png}\\[1cm] % Descomentar si se tiene el logo
+    \vspace*{0.5cm}
+    \includegraphics[width=0.75\textwidth]{logoInfo.png}\\[0.8cm]
 
-    {\Huge \bfseries \thetitle}\\[1.5cm]
+    {\Huge \bfseries \thetitle}\\[1.0cm]
 
     {\Large \bfseries Asignatura: Técnicas escalables de análisis de datos (Clasificadores)}\\[0.3cm]
-    {\large Escuela de Ingeniería Informática}\\[1.0cm]
+    {\large Escuela de Ingeniería Informática}\\[0.8cm]
 
-    \theauthor \\[0.3cm]
-    \textbf{Curso:} 2026 -- 2027 \\[0.20cm]
+    \theauthor \\[0.4cm]
+    Grupo 3 -- Conjunto de datos 2 (\textit{NYC Taxi Trip Duration}) \\[0.2cm]
+    \textbf{Curso:} 2026 -- 2027 \\[0.2cm]
     \textbf{Fecha:} \thedate
 
     \vfill
@@ -148,6 +122,144 @@
 \listoffigures    % Índice de imágenes
 \listoftables     % Índice de tablas
 
+% =====================================================================
+% ACRÓNIMOS: \ac{X} en el texto (la primera vez sale desarrollado);
+% \acs{X} en tablas, fórmulas y pies (solo la sigla).
+% Con printonlyused solo aparecen los que se usan al menos una vez.
+% =====================================================================
+\section*{Acrónimos}
+
+\begin{acronym}[NTAIE]
+  \acro{DT}{árbol de decisión}
+  \acro{FN}{falso negativo}
+  \acro{FP}{falso positivo}
+  \acro{NTAIE}{número total de ausentes o inconsistentes eliminados}
+  \acro{NTOE}{número total de \textit{outliers} eliminados}
+  \acro{PR}{precisión--exhaustividad}
+  \acro{RF}{\textit{Random Forest}}
+  \acro{ROC}{característica operativa del receptor}
+  \acro{TN}{verdadero negativo}
+  \acro{TP}{verdadero positivo}
+\end{acronym}
+
 \newpage
+% =====================================================================
+\section{Introducción}
+% =====================================================================
+% - Qué es esta etapa: crear, seleccionar y evaluar dos modelos finales.
+% - Qué modelos: uno básico (DT) y uno avanzado (RF), y por qué esos.
+% - Problema: clasificación multiclase (short / medium / long).
+% - Qué cambia respecto a entregables anteriores (limpieza revisada,
+%   selección con validación cruzada de ML).
+% - Breve guía de las secciones.
+
+
+% =====================================================================
+\section{Resumen ejecutivo del conjunto de datos}
+% =====================================================================
+% - Origen (Kaggle, TLC), propósito, tamaño, atributos (tipos), clase y
+%   su distribución. Se puede reutilizar el de los entregables anteriores.
+% - Si la limpieza cambia el reparto de clases, actualizar aquí.
+
+
+% =====================================================================
+\section{Descripción del trabajo realizado}
+% =====================================================================
+% Un apartado por fase. Las modificaciones respecto al entregable 1
+% se marcan con \cambio{...} y se explica por qué se hacen.
+
+\subsection{Conjuntos de entrenamiento y prueba}
+% - Mismas particiones que en el entregable 1 (80/20, semilla 42).
+% - Tamaños de cada conjunto y reparto de clases.
+% - Recordar que el conjunto de prueba no se usa en la creación ni
+%   en la selección de los modelos.
+
+\subsection{Limpieza de datos}
+% - Criterios del entregable 1 y correcciones del profesor.
+% - Criterios revisados (resaltados con \cambio): pasajeros, coordenadas,
+%   0 km, filtros de duración... Justificar cada cambio.
+% - Resultado: filas eliminadas en entrenamiento y en prueba,
+%   NTAIE, NTOE y tasa de no clasificados (antes y después).
+% - Tabla comparativa entregable 1 frente a entregable 3.
+
+\subsection{Transformación de datos}
+% - Atributos derivados (distancia, hora, día) y atributos descartados
+%   (resaltar si se quita store_and_fwd_flag u otro cambio).
+% - Transformaciones de cada modelo (DT y RF no necesitan escalado ni
+%   one-hot; indicar qué se hace en cada caso).
+% - Pipeline: los indexadores se ajustan solo con entrenamiento y se
+%   guardan junto al modelo, para aplicarlos tal cual al conjunto de prueba.
+
+\subsection{Creación y selección de modelos}
+
+\subsubsection{Metodología común}
+% - Validación cruzada interna con CrossValidator y ParamGridBuilder (ML).
+% - Número de pliegues y por qué.
+% - Métrica de selección (tasa de acierto o F1 ponderada) y por qué.
+% - Estrategia: búsqueda gruesa y después fina, y cómo se eligen
+%   los rangos iniciales.
+% - Semillas para que sea reproducible.
+
+\subsubsection{Árbol de decisión}
+% - Parámetros que se exploran y por qué; los demás, por defecto.
+% - Búsqueda gruesa: rejilla, tabla con la métrica media de cada
+%   combinación (avgMetrics) y análisis.
+% - Búsqueda fina: rejilla, tabla y análisis.
+% - Parámetros del modelo final y valor de la métrica con la que se eligió.
+% - Figura opcional: métrica según los parámetros.
+
+\subsubsection{\textit{Random Forest}}
+% - Parámetros que se exploran y por qué (numTrees, maxDepth...).
+% - Búsqueda gruesa: rejilla, tabla y análisis.
+% - Búsqueda fina: rejilla, tabla y análisis.
+% - Parámetros del modelo final y valor de la métrica con la que se eligió.
+% - Figura opcional: métrica según los parámetros.
+
+\subsection{Evaluación de los modelos finales}
+% - Todas las métricas se calculan sobre el conjunto de prueba con ML y MLlib.
+% - Recordar cómo se calcula cada una (puede ir en una tabla común).
+
+\subsubsection{Árbol de decisión}
+% - Tasa de error, desviación estándar e intervalo de confianza al 95 %.
+% - Matriz de confusión (3 x 3).
+% - Tasa de verdaderos positivos y de falsos positivos por clase.
+% - F-measure por clase.
+% - Área bajo la curva ROC y curva ROC de la clase minoritaria (long)
+%   frente al resto.
+% - Área bajo la curva PR de long frente al resto.
+% - Tasa de no clasificados y comprobación de que es al menos 10 veces
+%   menor que el error.
+
+\subsubsection{\textit{Random Forest}}
+% - Las mismas métricas que para el árbol de decisión.
+
+\subsubsection{Comparación de los dos modelos}
+% - Tabla con las métricas de los dos modelos lado a lado.
+% - ¿La diferencia de error es real? (comparar los intervalos de confianza).
+% - Coste (tiempo de entrenamiento, tamaño del modelo) frente a mejora.
+
+
+% =====================================================================
+\section{Conclusiones}
+% =====================================================================
+% - Qué modelo es mejor y por qué.
+% - Efecto de los cambios de limpieza.
+% - Limitaciones y posibles mejoras.
+
+
+% =====================================================================
+\section{Reparto del trabajo}
+% =====================================================================
+% - Tabla con el porcentaje de trabajo y las horas de cada estudiante.
+% - Opcional: qué parte ha hecho cada uno.
+
+
+% =====================================================================
+\newpage
+\phantomsection
+\addcontentsline{toc}{section}{Referencias}
+\nocite{*}                 % muestra todas las entradas del .bib aunque no se citen
+\bibliographystyle{unsrt}  % numeradas por orden de aparición en el texto
+\bibliography{referencias}
 
 \end{document}
