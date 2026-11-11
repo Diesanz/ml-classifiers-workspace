@@ -16,9 +16,12 @@
 \usepackage{caption}            % Personalizar captions
 \usepackage{amsmath, amssymb}   % Símbolos matemáticos
 \usepackage{booktabs}           % Tablas elegantes
+\usepackage{array}              % Columnas sin justificar en tablas
 \usepackage{longtable}
 \usepackage{seqsplit}
 \usepackage[printonlyused]{acronym}  % Acrónimos: se desarrollan solo la primera vez
+
+\emergencystretch=3em   % evita líneas que se salen del margen
 
 \addto\captionsspanish{
   \renewcommand{\tablename}{Tabla}
@@ -100,16 +103,16 @@
 \begin{titlepage}
     \centering
     \vspace*{0.5cm}
-    \includegraphics[width=0.75\textwidth]{logoInfo.png}\\[0.8cm]
+    \includegraphics[width=0.65\textwidth]{logoInfo.png}\\[0.8cm]
 
     {\Huge \bfseries \thetitle}\\[1.0cm]
 
     {\Large \bfseries Asignatura: Técnicas escalables de análisis de datos (Clasificadores)}\\[0.3cm]
     {\large Escuela de Ingeniería Informática}\\[0.8cm]
 
-    \theauthor \\[0.4cm]
-    Grupo 3 -- Conjunto de datos 2 (\textit{NYC Taxi Trip Duration}) \\[0.2cm]
-    \textbf{Curso:} 2026 -- 2027 \\[0.2cm]
+    \theauthor \\[0.5cm]
+    Grupo 3 -- Conjunto de datos 2 (\textit{NYC Taxi Trip Duration}) \\[0.3cm]
+    \textbf{Curso:} 2026 -- 2027 \\[0.3cm]
     \textbf{Fecha:} \thedate
 
     \vfill
@@ -146,55 +149,175 @@
 % =====================================================================
 \section{Introducción}
 % =====================================================================
-% - Qué es esta etapa: crear, seleccionar y evaluar dos modelos finales.
-% - Qué modelos: uno básico (DT) y uno avanzado (RF), y por qué esos.
-% - Problema: clasificación multiclase (short / medium / long).
-% - Qué cambia respecto a entregables anteriores (limpieza revisada,
-%   selección con validación cruzada de ML).
-% - Breve guía de las secciones.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{bagging.png}
-    \caption{Enter Caption}
-    \label{fig:placeholder}
-\end{figure}
+Este trabajo corresponde a la tercera etapa del proyecto de clasificación en Spark. Su objetivo es crear, seleccionar y evaluar dos modelos finales que clasifiquen los viajes del conjunto \textit{New York City Taxi Trip Duration} según su duración en tres clases: \textit{short} (hasta 10 minutos), \textit{medium} (hasta 25) y \textit{long} (más de 25). Es, por tanto, un problema de clasificación multiclase. A diferencia de lo que se proponía en el entregable individual, donde se permitía convertir el problema en binario, aquí se mantienen las tres clases, para que el problema sea el mismo que el planteado en el primer entregable.
+
+Se construyen dos modelos de Spark ML:
+\begin{itemize}
+    \item un \textbf{\ac{DT}}, como modelo básico;
+    \item un \textbf{\ac{RF}}, como modelo avanzado. Combina muchos árboles para reducir el sobreajuste de uno solo y admite directamente las tres clases, a diferencia de otros modelos de Spark, como los \textit{Gradient-Boosted Trees}, que solo admiten clasificación binaria.
+\end{itemize}
+Uno de los objetivos es comparar cómo se comportan dos modelos distintos con los mismos datos: si el modelo avanzado mejora de verdad al básico y a qué coste.\\
+
+Respecto al primer entregable, se revisan la limpieza y la transformación: se eliminan muchos menos viajes y cambia el cálculo de la distancia. Además, para seleccionar los parámetros de cada modelo se usan las utilidades de Spark ML: \texttt{ParamGridBuilder}, que construye una rejilla con todas las combinaciones de valores que se quieren probar, y \texttt{CrossValidator}, que evalúa cada combinación mediante validación cruzada. En la validación cruzada, el conjunto de entrenamiento se divide en varias partes (pliegues); cada combinación se entrena varias veces, dejando cada vez un pliegue distinto para validar, y se hace la media. Así, cada viaje se usa una vez para validar y el resultado no depende de la suerte de una única división entre entrenamiento y validación. La búsqueda se hace en dos pasos: primero una rejilla gruesa, con valores muy separados, y después una fina alrededor de los mejores.\\
+
+La sección~\ref{sec:resumen} resume el conjunto de datos. La sección~\ref{sec:trabajo} describe el trabajo realizado: los conjuntos de entrenamiento y prueba, la limpieza y la transformación revisadas, la creación y selección de cada modelo y su evaluación sobre el conjunto de prueba.
+
 
 % =====================================================================
 \section{Resumen ejecutivo del conjunto de datos}
+\label{sec:resumen}
 % =====================================================================
-% - Origen (Kaggle, TLC), propósito, tamaño, atributos (tipos), clase y
-%   su distribución. Se puede reutilizar el de los entregables anteriores.
-% - Si la limpieza cambia el reparto de clases, actualizar aquí.
+
+\begin{itemize}
+    \item \textbf{Origen de los datos:} competición de Kaggle \textit{New York City Taxi Trip Duration}, basada en los registros de taxis amarillos de Nueva York de 2016 publicados por la NYC Taxi and Limousine Commission (TLC), el organismo municipal que regula los taxis y vehículos de alquiler de la ciudad. Se utiliza el fichero \texttt{train.csv}, disponible en \url{https://www.kaggle.com/c/nyc-taxi-trip-duration/data}.
+    \item \textbf{Propósito:} el propósito original es predecir la duración de un viaje en taxi a partir de sus atributos (fecha y hora, coordenadas, pasajeros, etc.). En este proyecto se plantea como un problema de \textbf{clasificación multiclase}: predecir si un viaje es corto, medio o largo.
+    \item \textbf{Tamaño:} 1\,458\,644 instancias y 11 atributos originales, sin valores ausentes ni duplicados.
+    \item \textbf{Atributos (11 en total):}
+    \begin{itemize}
+        \item \textbf{Nominales (4):} \texttt{id} (identificador único del viaje), \texttt{vendor\_id} (proveedor del registro: 1 o 2) y las marcas temporales \texttt{pickup\_datetime} y \texttt{dropoff\_datetime}.
+        \item \textbf{Numéricos continuos (5):} \texttt{pickup\_longitude}, \texttt{pickup\_latitude}, \seqsplit{\texttt{dropoff\_longitude}}, \texttt{dropoff\_latitude} y \texttt{trip\_duration} (en segundos).
+        \item \textbf{Numéricos discretos (1):} \texttt{passenger\_count} (de 0 a 9).
+        \item \textbf{Booleanos (1):} \texttt{store\_and\_fwd\_flag} (Y/N).
+    \end{itemize}
+    \item \textbf{Descripción de la clase:} se construye a partir de \texttt{trip\_duration}, que se descarta como atributo predictor. Tiene tres valores: \textit{short} (duración $\leq$ 10 min), \textit{medium} (entre 10 y 25 min) y \textit{long} ($>$ 25 min). En el conjunto original, el reparto es \textit{short} 44,76\,\%, \textit{medium} 42,87\,\% y \textit{long} 12,37\,\%. \cambio{Con la limpieza revisada, el conjunto de entrenamiento queda en 44,85 / 42,89 / 12,26\,\%.} \textit{Long} es una minoría clara, lo que supone un desequilibrio moderado entre clases.
+\end{itemize}
 
 
 % =====================================================================
 \section{Descripción del trabajo realizado}
+\label{sec:trabajo}
 % =====================================================================
-% Un apartado por fase. Las modificaciones respecto al entregable 1
-% se marcan con \cambio{...} y se explica por qué se hacen.
+
+Esta sección sigue las fases del proyecto. Las tres primeras (conjuntos, limpieza y transformación) parten del primer entregable: se resume lo que se mantiene y se detallan las correcciones, que aparecen \cambio{en azul}.
 
 \subsection{Conjuntos de entrenamiento y prueba}
-% - Mismas particiones que en el entregable 1 (80/20, semilla 42).
-% - Tamaños de cada conjunto y reparto de clases.
-% - Recordar que el conjunto de prueba no se usa en la creación ni
-%   en la selección de los modelos.
+\label{sec:conjuntos}
+
+Se mantiene la partición del primer entregable: un 80\,\% para entrenamiento y un 20\,\% para prueba, con \texttt{randomSplit} y semilla 42, hecha sobre el conjunto completo antes de limpiar. Como la limpieza se aplica después, cambiarla no altera la partición.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Conjunto} & \textbf{Instancias} & \textbf{\textit{short} (\%)} & \textbf{\textit{medium} (\%)} & \textbf{\textit{long} (\%)} \\
+\midrule
+Original      & 1\,458\,644 & 44,76 & 42,87 & 12,37 \\
+Entrenamiento & 1\,166\,855 & 44,79 & 42,84 & 12,37 \\
+Prueba        &   291\,789 & 44,63 & 42,98 & 12,38 \\
+\bottomrule
+\end{tabular}
+\caption{Tamaño y reparto de la clase de cada conjunto, antes de limpiar.}
+\label{tab:particion}
+\end{table}
+
+El conjunto de entrenamiento se usa para crear los modelos y seleccionar sus parámetros mediante validación cruzada. El de prueba no interviene en ninguna decisión: solo se usa una vez, al final, para evaluar los modelos finales. La partición aleatoria conserva el reparto de la clase (\textit{long} es el 12,37\,\% en entrenamiento y el 12,38\,\% en prueba), así que no hace falta estratificar.
 
 \subsection{Limpieza de datos}
-% - Criterios del entregable 1 y correcciones del profesor.
-% - Criterios revisados (resaltados con \cambio): pasajeros, coordenadas,
-%   0 km, filtros de duración... Justificar cada cambio.
-% - Resultado: filas eliminadas en entrenamiento y en prueba,
-%   NTAIE, NTOE y tasa de no clasificados (antes y después).
-% - Tabla comparativa entregable 1 frente a entregable 3.
+\label{sec:limpieza}
+
+En el primer entregable se eliminaban los viajes con pasajeros fuera de 1--6, con coordenadas fuera de un rectángulo amplio alrededor de Nueva York, de 0 km con más de 5 minutos, de menos de 60 s y de más de 3 h. En total se descartaba el 0,956\,\% de los datos y el 1,00\,\% del conjunto de prueba. Al revisar esos criterios se ha considerado que varios eran demasiado estrictos: eliminaban viajes raros pero posibles, y un 1\,\% de no clasificados es una pérdida de datos excesiva.
+
+\cambio{Por eso se cambia el criterio general: \textbf{solo se eliminan los registros imposibles}. Los valores raros pero posibles se mantienen, porque son viajes reales y el modelo tiene que saber clasificarlos. Además, filtrar por duración es filtrar por la etiqueta, y con datos nuevos la duración no se conoce, así que ese filtro se reduce al mínimo.} A continuación se explica cada cambio; la tabla~\ref{tab:atributos}, al final de la sección, los resume todos.
+
+\paragraph{Pasajeros.} En el primer entregable se eliminaban los viajes con 0 pasajeros o con 7 a 9. \cambio{Son poco habituales, pero no imposibles: un viaje con 0 pasajeros puede ser un envío de paquetes, y uno de 7 a 9, una limusina o un vehículo de mayor capacidad. Su duración se registra igual que la de cualquier otro, así que su clase es correcta. Por eso se mantienen.}
+
+\paragraph{Viajes de 0 km.} En el primer entregable, los 3\,191 viajes de 0 km y más de 5 minutos se eliminaban porque contradicen a la distancia, el atributo que mejor separa las clases: un viaje sin desplazamiento debería ser corto, y si dura más de 5 minutos el modelo recibe un ejemplo que va en contra de esa regla. \cambio{Sin embargo, que la distancia registrada sea 0 no significa que el viaje no exista. Puede deberse a un atasco, con el taxi casi parado durante muchos minutos, algo habitual en el tráfico de Nueva York, o a que se registró como destino la misma dirección de recogida, por ejemplo en un viaje de ida y vuelta. En ambos casos la duración es real y su clase es correcta. Eliminarlos quitaría al modelo viajes que también aparecerán con datos nuevos, así que se mantienen: el modelo que se elija tendrá que aprender que, en esos casos, la distancia no es suficiente y decidir con el resto de atributos.}
+
+\paragraph{Duración.} En el primer entregable se eliminaban los viajes de menos de 60 s, porque un viaje real de menos de un minuto se consideró poco creíble, y los de más de 3 h, porque ese corte separaba el bloque anómalo de unas 24 h de los viajes largos normales y porque se consideró que un viaje de más de 3 horas era algo raro. \cambio{Al revisarlo, los dos cortes resultan demasiado estrictos. Las clases se definen solo a partir de la duración (\textit{short} hasta 10 minutos, \textit{medium} hasta 25 y \textit{long} a partir de ahí). Por eso, aunque un viaje de 30 s o de 5 h tenga una duración extrema, su etiqueta es correcta: el de 30 s es \textit{short} y el de 5 h es \textit{long}. En escala logarítmica (figura~\ref{fig:logduracion}), por debajo de 60 s la distribución baja poco a poco, sin un salto, y entre 3 y 23 h solo hay 269 viajes, todos \textit{long} (como se vio en el entregable anterior): es el final normal de la distribución. Además, en Nueva York no es raro que un taxi tarde varias horas, por ejemplo en un viaje fuera de la ciudad o con mucho tráfico, así que estos viajes se mantienen. En cambio, los 1\,843 viajes de más de 23 h forman un pico aislado en torno a las 24 h, separado del resto. Por eso se consideran registros fallidos; una posible explicación, que no se puede comprobar con estos datos, es un taxímetro que no se apagó al terminar el viaje. Si es así, su duración real es desconocida y su etiqueta no es fiable, así que se eliminan.}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{diagramas/histograma_log_duracion.png}
+\caption{Duración de los viajes en escala logarítmica (también en el eje vertical), con los cortes de 60 s, 3 h y 23 h.}
+\label{fig:logduracion}
+\end{figure}
+
+\paragraph{Coordenadas.} Para las coordenadas se usan dos rectángulos, como en el primer entregable. El \textbf{rectángulo ajustado} a la ciudad (latitud 40,477--40,917; longitud $-74{,}256$ a $-73{,}7$) solo sirve de referencia para ver qué viajes salen de Nueva York, y no elimina nada. El \textbf{rectángulo amplio} (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$) marca el límite de lo imposible: lo que queda fuera está a cientos de kilómetros (hasta longitud $-121{,}93$), y esos viajes sí se eliminan. La figura~\ref{fig:rectangulos} muestra los dos.
+
+\cambio{En el primer entregable se indicó que quedaban fuera del rectángulo amplio 81 viajes, pero esa cifra era la suma de 35 recogidas y 46 destinos. Como 32 viajes tienen las dos coordenadas fuera, se contaron dos veces: en realidad son 49 viajes distintos.} \cambio{Los viajes que salen del rectángulo ajustado se mantienen: sus destinos tienen una distancia mediana de 22,6 km y una duración mediana de 34 min, frente a 2,1 km y 11 min de los de dentro, y el 67,8\,\% son \textit{long}, así que son viajes largos reales. Las recogidas de fuera también son posibles, por ejemplo un taxi que deja a un cliente fuera de la ciudad y recoge allí mismo al siguiente.}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{diagramas/mapa_rectangulos.png}
+\caption{Recogidas y destinos según el rectángulo en el que caen. Cada viaje aporta dos puntos, así que los 81 puntos rojos corresponden a 49 viajes; los más lejanos quedan fuera de la vista.}
+\label{fig:rectangulos}
+\end{figure}
+
+\cambio{Por último, algunos puntos de recogida o destino caen sobre el río. Ningún rectángulo los detecta, porque están dentro de la ciudad, y eliminarlos con precisión exigiría la forma exacta de la costa, algo que no se puede aplicar en la limpieza con un criterio sencillo como el de los rectángulos. Además, no tiene por qué tratarse de errores en el viaje: pueden deberse a la imprecisión del GPS cerca de la orilla o a los túneles que pasan bajo el río (Holland, Lincoln y Queens-Midtown), en los que un taxi aparece sobre el agua aunque circule con normalidad. La duración de esos viajes es real, así que su clase es correcta. Por eso se mantienen; además, en el mapa se aprecia que son muy pocos frente a los casi tres millones de puntos, así que su efecto en el modelo es despreciable.}
+
+\paragraph{Resultado.} La limpieza se aplica con la misma función a entrenamiento y a prueba. En prueba, las filas eliminadas se cuentan como \ac{NTAIE} (coordenadas imposibles) o \ac{NTOE} (más de 23 h); si una fila cumple los dos criterios, cuenta como \acs{NTAIE}. La tabla~\ref{tab:limpieza} compara el resultado con el del primer entregable.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+ & \textbf{Entregable 1} & \textbf{Ahora} \\
+\midrule
+Entrenamiento tras limpiar & 1\,155\,830 & \cambio{1\,165\,381} \\
+Filas eliminadas en entrenamiento & 11\,025 (0,945\,\%) & \cambio{1\,474 (0,126\,\%)} \\
+Prueba tras limpiar & 288\,869 & \cambio{291\,371} \\
+Filas eliminadas en prueba & 2\,920 (1,00\,\%) & \cambio{418 (0,143\,\%)} \\
+\quad \acs{NTAIE} & 663 & \cambio{12} \\
+\quad \acs{NTOE} & 2\,257 & \cambio{406} \\
+\midrule
+\textbf{Tasa de no clasificados} & 1,00\,\% & \cambio{\textbf{0,143\,\%}} \\
+\bottomrule
+\end{tabular}
+\caption{Resultado de la limpieza: primer entregable y criterios actuales.}
+\label{tab:limpieza}
+\end{table}
+
+\cambio{Se eliminan unas siete veces menos filas que antes, y casi todas son el artefacto de más de 23 h. La tasa de no clasificados baja del 1,00\,\% al 0,143\,\% ($418 / 291\,789$), así que basta con que el error de los modelos supere el 1,43\,\% para cumplir el requisito de que sea al menos diez veces mayor.} El reparto de la clase apenas cambia: \cambio{44,85 / 42,89 / 12,26\,\% en entrenamiento y 44,70 / 43,04 / 12,26\,\% en prueba (\textit{short} / \textit{medium} / \textit{long}). \textit{Long} baja ligeramente porque los viajes de más de 23 h eran todos \textit{long}.}
 
 \subsection{Transformación de datos}
-% - Atributos derivados (distancia, hora, día) y atributos descartados
-%   (resaltar si se quita store_and_fwd_flag u otro cambio).
-% - Transformaciones de cada modelo (DT y RF no necesitan escalado ni
-%   one-hot; indicar qué se hace en cada caso).
-% - Pipeline: los indexadores se ajustan solo con entrenamiento y se
-%   guardan junto al modelo, para aplicarlos tal cual al conjunto de prueba.
+\label{sec:transformacion}
+
+Se mantiene la construcción de atributos del primer entregable: la hora (\texttt{pickup\_hour}) y el día de la semana (\texttt{pickup\_day}) se extraen de \texttt{pickup\_datetime}, y la distancia (\texttt{distance\_km}) se calcula a partir de las coordenadas. \cambio{Estos atributos derivados se describen ahora en esta sección, y no en la exploración, porque construirlos a partir de los originales es una transformación de los datos.} Se aplican dos cambios:
+
+\begin{itemize}
+    \item \cambio{\textbf{Distancia Manhattan.} En el primer entregable la distancia se calculaba en línea recta (fórmula de Haversine), pero un taxi no circula en línea recta, sino por las calles. En Manhattan las calles forman una cuadrícula girada unos 29° respecto al norte, así que ahora se gira el desplazamiento ese ángulo y se suman el recorrido a lo largo de las avenidas y el recorrido a lo largo de las calles. El resultado se acerca más a la distancia que de verdad recorre el taxi, y por eso en este entregable se usa esta distancia en lugar de la de Haversine. El atributo mantiene el nombre \texttt{distance\_km}.}
+    \item \cambio{\textbf{Se elimina \texttt{store\_and\_fwd\_flag}.} En el primer entregable se mantenía porque con el valor \texttt{Y} había más viajes \textit{long} (22,3\,\% frente a 12,3\,\%), lo que parecía indicar cierta relación con la clase. Al revisarlo se ha considerado que no conviene usarlo, por dos motivos. Primero, solo indica si el registro se guardó en el vehículo antes de enviarse por falta de conexión, es decir, cómo se transmitió el dato, no una característica del viaje. Y segundo, solo afecta al 0,55\,\% de los viajes, así que apenas puede ayudar al modelo.}
+\end{itemize}
+
+Así, los atributos que entran en \texttt{features} son \cambio{ocho}: \texttt{passenger\_count}, las cuatro coordenadas, \texttt{distance\_km}, \texttt{pickup\_hour} y \texttt{pickup\_day}. \cambio{Al eliminar \texttt{store\_and\_fwd\_flag} desaparece también el \texttt{StringIndexer} que lo convertía en número, así que la transformación queda en dos pasos}:
+\begin{enumerate}
+    \item un \texttt{StringIndexer} (\textit{estimator}) que convierte la clase en \texttt{label} (\textit{short}~$\to$~0, \textit{medium}~$\to$~1, \textit{long}~$\to$~2, por frecuencia en entrenamiento). Se ajusta solo con entrenamiento y se aplica igual a prueba;
+    \item un \texttt{VectorAssembler} (\textit{transformer}) que junta los ocho atributos en \texttt{features}.
+\end{enumerate}
+
+\paragraph{Transformaciones según el modelo.} Los dos modelos elegidos, el \ac{DT} y el \ac{RF}, se basan en árboles: dividen los datos con preguntas del tipo ``¿el atributo es menor que un umbral?''. Por eso son insensibles a la escala de los atributos y no hace falta normalizarlos. Por el mismo motivo tampoco hace falta codificar la hora y el día con \textit{one-hot}: el árbol puede separar cualquier tramo de horas o de días con un par de umbrales. Además, el \textit{one-hot} añadiría muchas columnas (24 para la hora y 7 para el día), lo que haría el entrenamiento más lento sin aportar nada a un árbol. Por eso los dos modelos usan la misma transformación.
+
+\paragraph{Resumen de los cambios.} La tabla~\ref{tab:atributos} resume los cambios respecto al primer entregable.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}p{5.0cm}}
+\toprule
+\textbf{Atributo} & \textbf{Entregable 1} & \textbf{Ahora} \\
+\midrule
+\texttt{id} & Eliminar (identificador) & Igual \\
+\texttt{vendor\_id} & Eliminar (no separa las clases) & Igual \\
+\texttt{pickup\_datetime} & Eliminar (se extraen hora y día) & Igual \\
+\texttt{dropoff\_datetime} & Eliminar (fuga de información) & Igual \\
+\texttt{trip\_duration} & Eliminar (define la clase); se quitaban los viajes de menos de 60 s y de más de 3 h & Eliminar (define la clase); \cambio{solo se quitan los de más de 23 h, que forman un pico aislado} \\
+\texttt{passenger\_count} & Mantener, solo valores de 1 a 6 & \cambio{Mantener, todos los valores (0 a 9): paquetes, vehículos grandes} \\
+Cuatro coordenadas & Mantener, solo dentro del rectángulo amplio & Igual (\cambio{49 viajes fuera, no 81}) \\
+\texttt{store\_and\_fwd\_flag} & Mantener (con \texttt{StringIndexer}) & \cambio{Eliminar: no describe el viaje y afecta al 0,55\,\%} \\
+\texttt{distance\_km} & Construir (Haversine); se quitaban los viajes de 0 km y más de 5 min & \cambio{Construir (Manhattan, recorrido por las calles); sin filtro: los 0 km pueden ser atascos} \\
+\texttt{pickup\_hour} & Construir & Igual \\
+\texttt{pickup\_day} & Construir & Igual \\
+Mes & Descartar (solo seis meses) & Igual \\
+\midrule
+\textbf{Atributos en \texttt{features}} & 9 & \cambio{8} \\
+\bottomrule
+\end{tabular}
+\caption{Resumen de los cambios respecto al primer entregable: decisión sobre cada atributo y condiciones de limpieza asociadas.}
+\label{tab:atributos}
+\end{table}
 
 \subsection{Creación y selección de modelos}
 
@@ -267,5 +390,17 @@
 \nocite{*}                 % muestra todas las entradas del .bib aunque no se citen
 \bibliographystyle{unsrt}  % numeradas por orden de aparición en el texto
 \bibliography{referencias}
+
+% =====================================================================
+\appendix
+% =====================================================================
+
+\section{Scripts entregados}
+% - Lista de scripts: qué hace cada uno y en qué orden se ejecutan.
+% - Variables PATH y FILE, y carpetas de los modelos (./modeloDT, ./modeloRF).
+
+\section{Resultados completos de la validación cruzada}
+% - Tablas completas de avgMetrics de todas las combinaciones probadas,
+%   si en el texto solo se muestran las más relevantes.
 
 \end{document}
