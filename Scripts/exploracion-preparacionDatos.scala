@@ -10,9 +10,11 @@ import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.mllib.evaluation.MulticlassMetrics
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 
+spark.sparkContext.setLogLevel("ERROR")   // oculta los avisos (WARN) de Spark; solo salen los errores
 
-// Ruta completa al fichero (cambiar en base a donde se tenga el .csv)
-var PATH = "./train.csv"
+// Ubicación del fichero de datos original (cambiar en base a donde se tenga el .csv)
+val PATH = "./"
+val FILE = "train.csv"
 
 // Paso 1: cargar el dataset
 println("Paso 1: cargando el dataset")
@@ -36,7 +38,7 @@ val taxiSchema = StructType(Array(
 val rawTaxiDF = spark.read.format("csv").
   option("header", "true").
   schema(taxiSchema).
-  load(PATH).
+  load(PATH + FILE).
   cache()
 
 println("Esquema del dataset original:")
@@ -180,7 +182,7 @@ testClean.groupBy("trip_class").count().
 //  - Se eliminan: id (identificador), dropoff_datetime (fuga de información),
 //    vendor_id (reparto de clases casi igual al global), trip_duration (solo
 //    servía para crear la clase), pickup_datetime (ya extraída hora y día) y
-//    store_and_fwd_flag (solo afecta al 0,55 % de los viajes y no describe el viaje)
+//    store_and_fwd_flag (describe cómo se transmitió el registro, no el viaje)
 //  - pickup_longitude/latitude y dropoff_* se mantienen como candidatas
 //  - El mes se descarta: el dataset solo cubre 6 meses y no generaliza
 //  - distance_km supone que el destino se conoce al inicio del viaje
@@ -266,3 +268,15 @@ labelIndexer.labelsArray(0).zipWithIndex.foreach { case (c, i) => println(s"  $c
 // Opcional: guardar los conjuntos transformados (parquet, porque features es un vector)
 //trainFinal.write.mode("overwrite").parquet("output/train")
 //testFinal.write.mode("overwrite").parquet("output/test")
+
+
+// Liberar la caché de lo que ya no hace falta
+// Los recuentos (nTrain, nTest, ntaie, ntoe...) ya están calculados y guardados en variables.
+// Se mantienen trainClean y testClean, de los que salen trainFinal y testFinal: si se liberan
+// antes de cachear trainFinal o testFinal, Spark tendría que rehacerlos desde el CSV.
+// Cada script los libera después de cachear el conjunto que usa
+rawTaxiDF.unpersist()
+taxiDF.unpersist()
+classDF.unpersist()
+train.unpersist()
+test.unpersist()
