@@ -20,6 +20,7 @@
 \usepackage{longtable}
 \usepackage{seqsplit}
 \usepackage[printonlyused]{acronym}  % Acrónimos: se desarrollan solo la primera vez
+\usepackage{multirow}
 
 \emergencystretch=3em   % evita líneas que se salen del margen
 
@@ -322,45 +323,162 @@ Mes & Descartar (solo seis meses) & Igual \\
 \subsection{Creación y selección de modelos}
 
 \subsubsection{Metodología común}
-% - Validación cruzada interna con CrossValidator y ParamGridBuilder (ML).
-% - Número de pliegues y por qué.
-% - Métrica de selección (tasa de acierto o F1 ponderada) y por qué.
-% - Estrategia: búsqueda gruesa y después fina, y cómo se eligen
-%   los rangos iniciales.
-% - Semillas para que sea reproducible.
+La selección de los parámetros se realiza exclusivamente sobre el conjunto
+de entrenamiento limpio y transformado. El conjunto de prueba no interviene
+en la búsqueda ni en la elección de los parámetros; se reserva para la
+evaluación final de los modelos seleccionados.
+
+Para automatizar la búsqueda se utilizan las herramientas
+\texttt{ParamGridBuilder} y \texttt{CrossValidator} de Spark ML. Se aplica
+validación cruzada con tres pliegues: en cada iteración se entrena con dos
+pliegues y se valida con el tercero, y la métrica de cada configuración es
+la media de los tres resultados. Cada pliegue contiene aproximadamente
+388\,000 viajes de entrenamiento, por lo que proporciona una estimación
+amplia. Se fija la semilla 2627 para que la división en pliegues sea
+reproducible.
+
+La métrica de selección es la tasa de acierto (\textit{accuracy}), que
+corresponde a la proporción de viajes correctamente clasificados. Se elige
+porque pide minimizar el error y maximizar el acierto es
+equivalente, ya que $\text{error}=1-\text{accuracy}$. Además, usar la misma
+métrica permite comparar directamente los dos modelos. Las clases no tienen
+el mismo tamaño, aunque la clase mayoritaria representa aproximadamente el
+44,85\,\% de los datos de entrenamiento; por ello, el acierto se interpreta
+junto con las métricas por clase que se calcularán en la evaluación final.
+
+La búsqueda se divide en dos fases para limitar el coste computacional.
+Primero se exploran valores separados entre sí (\textit{búsqueda gruesa});
+después se prueban valores próximos a las mejores configuraciones
+(\textit{búsqueda fina}). Esta estrategia es una aproximación: no garantiza
+encontrar el óptimo global, pero permite estudiar rangos razonables sin
+probar todas las combinaciones posibles. La configuración con mayor acierto
+medio en validación cruzada se selecciona y se reentrena con todo el
+conjunto de entrenamiento.
 
 \subsubsection{Árbol de decisión}
-% - Parámetros que se exploran y por qué; los demás, por defecto.
-% - Búsqueda gruesa: rejilla, tabla con la métrica media de cada
-%   combinación (avgMetrics) y análisis.
-% - Búsqueda fina: rejilla, tabla y análisis.
-% - Parámetros del modelo final y valor de la métrica con la que se eligió.
-% - Figura opcional: métrica según los parámetros.
+
+En el árbol se exploran dos parámetros que controlan su complejidad:
+
+\begin{itemize}
+    \item \texttt{maxDepth} limita el número máximo de niveles. Un árbol más
+    profundo puede representar reglas más detalladas, pero también puede
+    ajustarse demasiado a peculiaridades del entrenamiento.
+    \item \texttt{minInstancesPerNode} fija el número mínimo de ejemplos que
+    debe tener un nodo hoja. Un valor pequeño permite hojas muy específicas;
+    un valor grande simplifica el árbol y puede impedir que capture patrones
+    útiles.
+\end{itemize}
+
+La primera fase prueba cinco profundidades y cuatro tamaños mínimos de hoja,
+es decir, 20 combinaciones. La segunda fase, alrededor de las mejores
+configuraciones observadas, prueba 16 combinaciones:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Fase} & \texttt{maxDepth} & \texttt{minInstancesPerNode} \\
+\midrule
+Gruesa & 5, 10, 15, 20, 25 & 1, 50, 100, 1000 \\
+Fina & 18, 21, 23, 25 & 25, 50, 75, 150 \\
+\bottomrule
+\end{tabular}
+\caption{Rejillas de búsqueda del árbol de decisión.}
+\label{tab:rejilla-dt}
+\end{table}
+
+La búsqueda gruesa muestra que los árboles poco profundos (\texttt{maxDepth}
+= 5) obtienen un acierto medio de 0,7570. El mejor resultado de esa fase es
+0,7993, con profundidad 25 y un mínimo de 50 instancias por hoja. También
+se observa que permitir hojas de una sola instancia en árboles profundos
+empeora el resultado: con profundidad 25 el acierto baja a 0,7478. Esto es
+compatible con la hipótesis de que un árbol demasiado específico se ajusta
+a detalles de los pliegues de entrenamiento y generaliza peor. En el otro
+extremo, exigir 1000 instancias por hoja limita demasiado las divisiones y
+reduce el acierto.
+
+La búsqueda fina confirma que las mejores configuraciones están cerca de
+la profundidad máxima probada y de 50 instancias por hoja. El mejor acierto
+medio es 0,7993 (error medio 0,2007), obtenido con
+\texttt{maxDepth} = 25 y \texttt{minInstancesPerNode} = 50. Las
+configuraciones con profundidad 21 y 23 y el mismo tamaño mínimo obtienen
+también 0,7993 al redondear a cuatro decimales; se selecciona la que
+\texttt{CrossValidator} identifica como mejor en la ejecución, cuyo valor
+sin redondear es 0,799315. Los demás parámetros se mantienen fijos:
+\texttt{maxBins} = 32, \texttt{impurity} = \texttt{gini} y
+\texttt{minInfoGain} = 0. Se deja que el tamaño mínimo de hoja controle la
+complejidad, sin exigir una ganancia mínima adicional en cada división.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Configuración} & \textbf{Acierto medio CV} & \textbf{Error medio CV} \\
+\midrule
+Fase gruesa: profundidad 25, mínimo 50 & 0,7993 & 0,2007 \\
+Fase fina: profundidad 25, mínimo 50 & 0,7993 & 0,2007 \\
+\bottomrule
+\end{tabular}
+\caption{Mejor configuración del árbol en cada fase.}
+\label{tab:resultado-dt}
+\end{table}
+
+El modelo seleccionado tiene profundidad real 25 y 7\,601 nodos. La
+validación cruzada no muestra una mejora importante al aumentar la
+profundidad de 21 a 25, por lo que la elección de 25 debe entenderse como
+la mejor configuración dentro de la rejilla probada, no como prueba de que
+sea la profundidad óptima posible.
+
 
 \subsubsection{\textit{Random Forest}}
-% - Parámetros que se exploran y por qué (numTrees, maxDepth...).
-% - Búsqueda gruesa: rejilla, tabla y análisis.
-% - Búsqueda fina: rejilla, tabla y análisis.
-% - Parámetros del modelo final y valor de la métrica con la que se eligió.
-% - Figura opcional: métrica según los parámetros.
+El Random Forest combina varios árboles entrenados con muestras y
+selecciones de atributos aleatorias. La combinación de sus predicciones
+busca reducir la variabilidad de un árbol individual. En su configuración
+se estudian el número de árboles, su profundidad máxima y el tamaño mínimo
+de las hojas.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{crossVal_randomForest.png}
-    \caption{Enter Caption}
-    \label{fig:placeholder}
-\end{figure}
+En la búsqueda gruesa se prueba el producto de dos números de árboles y
+tres profundidades, manteniendo fijo el tamaño mínimo de hoja en 50. En la
+búsqueda fina se exploran tres profundidades y dos tamaños mínimos de hoja.
+El número de árboles se fija en 20 para esta segunda fase ya
+que pasar de 20 a 50 apenas mejoró el acierto en la primera fase y aumentó
+considerablemente el tiempo.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{randomForest.png}
-    \caption{Enter Caption}
-    \label{fig:placeholder}
-\end{figure}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+\textbf{Fase} & \texttt{numTrees} & \texttt{maxDepth} &
+\texttt{minInstancesPerNode} \\
+\midrule
+Gruesa & 20, 50 & 10, 15, 20 & 50 (fijo) \\
+Fina & 20 (fijo) & 20, 25, 30 & 10, 50 \\
+\bottomrule
+\end{tabular}
+\caption{Rejillas de búsqueda del \textit{Random Forest}.}
+\label{tab:rejilla-rf}
+\end{table}
+
+Se mantienen fijos \texttt{maxBins} = 32 e \texttt{impurity} =
+\texttt{gini}, para usar el mismo criterio de división que en el árbol.
+\texttt{featureSubsetStrategy} = \texttt{sqrt} hace que cada división
+considere una parte de los atributos (aproximadamente $\sqrt{8}$), lo que
+favorece que los árboles del bosque sean diferentes. Se usa muestreo
+\textit{bootstrap} con reemplazo (\texttt{bootstrap} = \texttt{true}) y
+\texttt{subsamplingRate} = 1.0. La semilla 2627 hace reproducibles las
+muestras aleatorias. Se activa \texttt{cacheNodeIds} para acelerar el
+entrenamiento de árboles profundos.
+
+
 
 \subsection{Evaluación de los modelos finales}
 % - Todas las métricas se calculan sobre el conjunto de prueba con ML y MLlib.
 % - Recordar cómo se calcula cada una (puede ir en una tabla común).
+
+\subsubsection{Metodología común}
 
 \subsubsection{Árbol de decisión}
 % - Tasa de error, desviación estándar e intervalo de confianza al 95 %.
@@ -372,6 +490,118 @@ Mes & Descartar (solo seis meses) & Igual \\
 % - Área bajo la curva PR de long frente al resto.
 % - Tasa de no clasificados y comprobación de que es al menos 10 veces
 %   menor que el error.
+
+El rendimiento general del modelo sobre el conjunto de prueba arroja las siguientes métricas de error:
+\begin{itemize}
+    \item \textbf{Tasa de error ($e_S$):} $0.1983$ %
+    \item \textbf{Desviación estándar ($\sigma$):} $0.00074$ %
+\end{itemize}
+
+La tasa de error obtenida es una estimación muestral del error verdadero del modelo ($e_D$). Para conocer el margen real de fiabilidad de esta métrica y saber qué diferencias de rendimiento podrían deberse al azar, calculamos un intervalo de confianza. Tratando la clasificación de cada registro como un ensayo de Bernoulli (el modelo acierta o falla), el conteo total de errores sigue una distribución binomial.
+
+Para aproximar esta distribución binomial a una distribución normal y aplicar su formulación, deben cumplirse las siguientes dos condiciones estadísticas:
+
+\begin{equation}
+    \begin{cases}
+        n \ge 30 \\
+        n p (1-p) \ge 5
+    \end{cases}
+\end{equation}
+
+Tomando la tasa de error observada como estimación de la probabilidad de fallo ($p \approx e_S = 0.1983$) sobre los $n = 291371$ registros del conjunto de prueba, ambas exigencias se cumplen:
+
+\begin{equation}
+    \begin{cases}
+        291371 \ge 30 \\
+        291371 \cdot 0.1983 \cdot (1 - 0.1983) \approx 46320 \ge 5
+    \end{cases}
+\end{equation}
+
+Al cumplirse estas condiciones, se utiliza la siguiente formulación para un nivel de confianza del $N$\%:
+
+\begin{equation}
+    e_{D}(h) \in e_{S}(h) \pm z_{N} \cdot \sigma, \quad \text{donde} \quad \sigma = \sqrt{\frac{e_{S}(h) (1-e_{S}(h))}{n}}
+\end{equation}
+
+Aplicando esta fórmula para una confianza del 95\% ($z_{95} = 1.96$) obtenemos:
+
+\begin{itemize}
+    \item \textbf{Intervalo de confianza (95\%):} $[0.1968, 0.1997]$ %
+\end{itemize}
+
+Destacamos que la tasa de error global (19.83\%) es más de diez veces superior a la tasa de registros no clasificados ($0.00143$), lo que valida la robustez de la métrica obtenida, ya que el error muestra limitaciones predictivas reales y no se encuentra artificialmente condicionado por los descartes.
+
+\subsubsection{Matriz de confusión y métricas por clase}
+En la Tabla \ref{tab:cm_dt_multi} se presenta la matriz de confusión multiclase, donde la diagonal principal recoge los Verdaderos Positivos (TP) de cada categoría. %
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{cc|c|c|c|}
+\cline{3-5}
+& & \multicolumn{3}{c|}{\textbf{Clase Predicha}} \\
+\cline{3-5}
+& & \textbf{Short} & \textbf{Medium} & \textbf{Long} \\
+\hline
+\multicolumn{1}{|c|}{\multirow{3}{*}{\textbf{Clase Real}}} & \textbf{Short} & \cellcolor{green!25}112.816 & 17.402 & 17 \\ %
+\cline{2-5}
+\multicolumn{1}{|c|}{} & \textbf{Medium} & 22.036 & \cellcolor{green!25}97.537 & 5.842 \\ %
+\cline{2-5}
+\multicolumn{1}{|c|}{} & \textbf{Long} & 736 & 11.737 & \cellcolor{green!25}23.248 \\ %
+\hline
+\end{tabular}
+\caption{Matriz de confusión multiclase para el modelo Árbol de Decisión.}
+\label{tab:cm_dt_multi}
+\end{table}
+
+A partir de la matriz, se extraen las métricas desglosadas por clase (Tabla \ref{tab:metricas_dt}), las cuales permiten observar el comportamiento del modelo frente al desequilibrio original de los datos.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Clase} & \textbf{TPR} & \textbf{FPR} & \textbf{F-Measure (F1)} \\ 
+\midrule
+Short & 0.8662 & 0.1413 & 0.8488 \\ %
+Medium & 0.7777 & 0.1756 & 0.7738 \\ %
+Long & 0.6508 & 0.0229 & 0.7172 \\ %
+\bottomrule
+\end{tabular}
+\caption{Métricas de rendimiento por clase del Árbol de Decisión.}
+\label{tab:metricas_dt}
+\end{table}
+\newpage
+El valor F-Measure alcanza su máximo en la clase mayoritaria (\textit{short}, 0.8488) debido al mayor volumen de ejemplos que facilita la creación de reglas precisas. A medida que descendemos hacia las clases \textit{medium} y \textit{long}, la métrica disminuye de forma esperable por el desequilibrio del conjunto de datos. Sin embargo, el F1 de la clase \textit{long} (0.7172) demuestra una buena capacidad predictiva. Destaca su reducida tasa de falsos positivos (FPR = 0.0229), que indica que el modelo es bueno al clasificar un viaje como largo: cuando predice esta clase, su probabilidad de acierto es muy alta, a costa de dejar algunos viajes largos sin detectar (Falsos Negativos).
+
+\subsubsection{Evaluación de la clase minoritaria (Long frente al resto)}
+Dado que la clase \textit{long} representa la minoritaria en este conjunto de datos (aproximadamente un 12.26\% tras la limpieza), analizamos su rendimiento aislando esta categoría frente a las demás.
+La Tabla \ref{tab:cm_dt_bin} muestra la matriz de confusión adaptada para este enfoque binario.
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{cc|c|c|}
+\cline{3-4}
+& & \multicolumn{2}{c|}{\textbf{Clase Predicha}} \\
+\cline{3-4}
+& & \textbf{Long} & \textbf{Short o Medium} \\
+\hline
+\multicolumn{1}{|c|}{\multirow{2}{*}{\textbf{Clase Real}}} & \textbf{Long} & \cellcolor{green!25}23.248 (TP) & \cellcolor{red!25}12.473 (FN) \\
+\cline{2-4}
+\multicolumn{1}{|c|}{} & \textbf{Resto} & \cellcolor{red!25}5.859 (FP) & \cellcolor{green!25}249.791 (TN) \\ 
+\hline
+\end{tabular}
+\caption{Matriz de confusión binaria (clase Long frente al resto).}
+\label{tab:cm_dt_bin}
+\end{table}
+
+Para evaluar la capacidad del clasificador de distinguir esta clase minoritaria, se han obtenido las siguientes áreas: %
+\begin{itemize}
+    \item \textbf{Área bajo la curva ROC (ROC AUC):} $0.9471$ %
+    \item \textbf{Área bajo la curva PR (PR AUC):} $0.8031$ %
+\end{itemize}
+
+Un área ROC de 0.9471 demuestra una muy buena capacidad de discriminación global, indicando que el modelo asigna una mayor probabilidad de ser \textit{long} a un viaje largo real frente a uno de otra clase en casi el 95\% de los casos. No obstante, al tratarse de un problema fuertemente desequilibrado, el área bajo la curva PR es la métrica más rigurosa. El valor obtenido de 0.8031 en PR AUC confirma finalmente que el buen rendimiento del clasificador no se deriva de la gran cantidad de Verdaderos Negativos (TN), sino que el modelo identifica bien los casos positivos de la clase minoritaria.
 
 \subsubsection{\textit{Random Forest}}
 % - Las mismas métricas que para el árbol de decisión.
