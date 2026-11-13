@@ -271,7 +271,25 @@ Filas eliminadas en prueba & 2\,920 (1,00\,\%) & \cambio{418 (0,143\,\%)} \\
 \label{tab:limpieza}
 \end{table}
 
-\cambio{Se eliminan unas siete veces menos filas que antes, y casi todas son el artefacto de más de 23 h. La tasa de no clasificados baja del 1,00\,\% al 0,143\,\% ($418 / 291\,789$), así que basta con que el error de los modelos supere el 1,43\,\% para cumplir el requisito de que sea al menos diez veces mayor.} El reparto de la clase apenas cambia: \cambio{44,85 / 42,89 / 12,26\,\% en entrenamiento y 44,70 / 43,04 / 12,26\,\% en prueba (\textit{short} / \textit{medium} / \textit{long}). \textit{Long} baja ligeramente porque los viajes de más de 23 h eran todos \textit{long}.}
+\cambio{Se eliminan unas siete veces menos filas que antes, y casi todas son el artefacto de más de 23 h. La tasa de no clasificados baja del 1,00\,\% al 0,143\,\% ($418 / 291\,789$), así que basta con que el error de los modelos supere el 1,43\,\% para cumplir el requisito de que sea al menos diez veces mayor.} El reparto de la clase apenas cambia (tabla~\ref{tab:conjuntos-limpios}).
+\cambio{\textit{Long} baja ligeramente porque los viajes de más de 23 h eran
+todos \textit{long}.} Estos son los conjuntos con los que se crean y se
+evalúan los modelos.
+ 
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Conjunto} & \textbf{Instancias} & \textbf{\textit{short}} & \textbf{\textit{medium}} & \textbf{\textit{long}} \\
+\midrule
+Entrenamiento & \cambio{1\,165\,381} & \cambio{522\,655 (44,85\,\%)} & \cambio{499\,878 (42,89\,\%)} & \cambio{142\,848 (12,26\,\%)} \\
+Prueba        & \cambio{291\,371}   & \cambio{130\,235 (44,70\,\%)} & \cambio{125\,415 (43,04\,\%)} & \cambio{35\,721 (12,26\,\%)} \\
+\bottomrule
+\end{tabular}
+\caption{Conjuntos de entrenamiento y prueba tras la limpieza.}
+\label{tab:conjuntos-limpios}
+\end{table}
 
 \subsection{Transformación de datos}
 \label{sec:transformacion}
@@ -321,118 +339,331 @@ Mes & Descartar (solo seis meses) & Igual \\
 \end{table}
 
 \subsection{Creación y selección de modelos}
-
+\label{sec:seleccion}
+ 
+En esta fase se construyen los dos modelos finales y se eligen los valores
+de sus parámetros. Un mismo algoritmo da modelos muy distintos según cómo se
+configure: un árbol poco profundo no aprende lo suficiente y uno demasiado
+profundo memoriza el entrenamiento. Por eso, para cada modelo se prueban
+varias combinaciones de valores, se estima el error de cada una y se elige
+la mejor.
+ 
+Todo el proceso usa solo el conjunto de entrenamiento ya limpio y
+transformado (1\,165\,381 viajes, tabla~\ref{tab:conjuntos-limpios}). El
+conjunto de prueba no interviene en ninguna decisión. Primero se describe el
+método común a los dos modelos (sección~\ref{sec:metodologia}) y después la
+búsqueda de cada uno: el \ac{DT} (sección~\ref{sec:seleccion-dt}) y el
+\ac{RF} (sección~\ref{sec:seleccion-rf}).
+ 
+ 
 \subsubsection{Metodología común}
-La selección de los parámetros se realiza exclusivamente sobre el conjunto
-de entrenamiento limpio y transformado. El conjunto de prueba no interviene
-en la búsqueda ni en la elección de los parámetros; se reserva para la
-evaluación final de los modelos seleccionados.
-
-Para automatizar la búsqueda se utilizan las herramientas
-\texttt{ParamGridBuilder} y \texttt{CrossValidator} de Spark ML. Se aplica
-validación cruzada con tres pliegues: en cada iteración se entrena con dos
-pliegues y se valida con el tercero, y la métrica de cada configuración es
-la media de los tres resultados. Cada pliegue contiene aproximadamente
-388\,000 viajes de entrenamiento, por lo que proporciona una estimación
-amplia. Se fija la semilla 2627 para que la división en pliegues sea
-reproducible.
-
-La métrica de selección es la tasa de acierto (\textit{accuracy}), que
-corresponde a la proporción de viajes correctamente clasificados. Se elige
-porque pide minimizar el error y maximizar el acierto es
-equivalente, ya que $\text{error}=1-\text{accuracy}$. Además, usar la misma
-métrica permite comparar directamente los dos modelos. Las clases no tienen
-el mismo tamaño, aunque la clase mayoritaria representa aproximadamente el
-44,85\,\% de los datos de entrenamiento; por ello, el acierto se interpreta
-junto con las métricas por clase que se calcularán en la evaluación final.
-
-La búsqueda se divide en dos fases para limitar el coste computacional.
-Primero se exploran valores separados entre sí (\textit{búsqueda gruesa});
-después se prueban valores próximos a las mejores configuraciones
-(\textit{búsqueda fina}). Esta estrategia es una aproximación: no garantiza
-encontrar el óptimo global, pero permite estudiar rangos razonables sin
-probar todas las combinaciones posibles. La configuración con mayor acierto
-medio en validación cruzada se selecciona y se reentrena con todo el
-conjunto de entrenamiento.
-
-\subsubsection{Árbol de decisión}
-
-En el árbol se exploran dos parámetros que controlan su complejidad:
-
+\label{sec:metodologia}
+ 
+\paragraph{Validación cruzada.} Para estimar el error de cada combinación
+de parámetros sin usar el conjunto de prueba se usa validación cruzada, con
+dos utilidades de Spark ML~\cite{spark_tuning}:
 \begin{itemize}
-    \item \texttt{maxDepth} limita el número máximo de niveles. Un árbol más
-    profundo puede representar reglas más detalladas, pero también puede
-    ajustarse demasiado a peculiaridades del entrenamiento.
-    \item \texttt{minInstancesPerNode} fija el número mínimo de ejemplos que
-    debe tener un nodo hoja. Un valor pequeño permite hojas muy específicas;
-    un valor grande simplifica el árbol y puede impedir que capture patrones
-    útiles.
+    \item \texttt{ParamGridBuilder} construye la rejilla: todas las
+    combinaciones de los valores que se quieren probar.
+    \item \texttt{CrossValidator} divide el entrenamiento en $k$ partes
+    (pliegues). Para cada combinación entrena $k$ modelos, cada uno con
+    $k-1$ pliegues, y lo valida con el pliegue que ha quedado fuera. El
+    valor de la combinación es la media de los $k$ resultados
+    (\texttt{avgMetrics}). Al final se queda con la mejor combinación y la
+    vuelve a entrenar con todo el entrenamiento (\texttt{bestModel}).
 \end{itemize}
-
-La primera fase prueba cinco profundidades y cuatro tamaños mínimos de hoja,
-es decir, 20 combinaciones. La segunda fase, alrededor de las mejores
-configuraciones observadas, prueba 16 combinaciones:
-
+ 
+\paragraph{Número de pliegues.} Se usan $k = 3$ pliegues. Spark asigna cada
+viaje a un pliegue al azar, así que cada uno tiene aproximadamente un tercio
+del entrenamiento: $1\,165\,381 / 3 \approx 388\,000$ viajes. En cada ronda
+se entrena con dos pliegues (unos 777\,000 viajes) y se valida con el
+tercero. Los motivos para usar 3 y no más son:
+\begin{enumerate}
+    \item \textbf{Más pliegues mejoran la estimación, pero el coste crece
+    con $k$.} Con más pliegues, cada modelo se entrena con una parte mayor
+    del entrenamiento y se valida con una menor: con 10 pliegues, cada
+    modelo usa el 90\,\% de los datos en vez del 67\,\%. Así se parece más al
+    modelo final, que se entrena con todo, y el resultado depende menos de
+    cómo hayan quedado repartidos los viajes entre los pliegues. A cambio,
+    cada combinación se entrena $k$ veces, así que el número de modelos es
+    el número de combinaciones por $k$~\cite{spark_tuning}. Con 10 pliegues
+    se entrenarían más del triple de modelos, y cada uno con más datos: la
+    fase gruesa del \ac{DT}, que con 3 pliegues tarda una hora, pasaría a
+    tardar unas cuatro, y la del \ac{RF} mucho más.
+    \item \textbf{Con tantos datos, más pliegues apenas mejoran la
+    estimación.} Más pliegues sirven sobre todo cuando hay pocos datos:
+    cada modelo entrena con más viajes y la estimación es menos pesimista.
+    Aquí cada pliegue de validación ya tiene unos 388\,000 viajes, y con
+    conjuntos grandes basta con un $k$ pequeño para obtener una estimación
+    fiable~\cite{raschka2022}.
+    \item \textbf{Es un valor habitual.} La documentación de Spark indica
+    que 3 y 10 son los valores más comunes y usa $k = 3$ en su
+    explicación~\cite{spark_tuning}.
+\end{enumerate}
+No hace falta estratificar los pliegues, es decir, forzar que cada uno
+tenga la misma proporción de cada clase. Al repartir los viajes al azar, la
+proporción de una clase en un pliegue varía como cualquier proporción
+calculada sobre una muestra~\cite{mitchell1997}. Para \textit{long}, la clase
+minoritaria y la más sensible, con $p = 0{,}1226$ y unos $n = 388\,000$
+viajes por pliegue:
+\[
+\sigma = \sqrt{\frac{p\,(1-p)}{n}} = \sqrt{\frac{0{,}1226 \cdot 0{,}8774}{388\,000}}
+\approx 0{,}00053 .
+\]
+Al 95\,\%, la proporción de \textit{long} en cada pliegue estará entre el
+12,16\,\% y el 12,36\,\% ($12{,}26 \pm 1{,}96 \cdot 0{,}053$ puntos), una
+diferencia que no cambia el problema. Es lo mismo que se observa en la
+partición entre entrenamiento y prueba, hecha también al azar: \textit{long}
+es el 12,37\,\% en un conjunto y el 12,38\,\% en el otro
+(tabla~\ref{tab:particion}). Además, se fija la semilla 2627, así que los
+pliegues son siempre los mismos, también para los dos modelos, que se
+comparan sobre los mismos datos.
+ 
+\paragraph{Métrica de selección.} Se usa la tasa de acierto
+(\textit{accuracy}), la proporción de viajes bien clasificados. Los motivos
+son:
+\begin{enumerate}
+    \item \textbf{Es la otra cara del error.} Como
+    $\text{error} = 1 - \text{acierto}$, la combinación con más acierto es
+    la de menos error, que es la medida principal con la que se evalúan los
+    modelos en prueba. El desequilibrio entre clases es moderado
+    (\textit{long} es el 12,26\,\%, tabla~\ref{tab:conjuntos-limpios}), y en
+    la evaluación el acierto se completa con las métricas por clase.
+    \item \textbf{Las otras métricas no encajan como criterio único.} El
+    \textit{recall}, la precisión y la F-measure se calculan para una sola
+    clase: elegir con ellas favorecería esa clase a costa de las otras dos,
+    y aquí ningún tipo de error es más grave que otro. El área bajo la curva
+    ROC o la PR solo se define para dos clases. La F-measure ponderada por
+    el tamaño de cada clase da prácticamente lo mismo que el acierto.
+\end{enumerate}
+Los dos modelos se seleccionan con la misma métrica para poder compararlos.
+ 
+ 
+\paragraph{Estrategia de búsqueda.} Probar muchos valores de varios
+parámetros a la vez es inviable: el número de combinaciones se multiplica
+con cada parámetro. Por eso la búsqueda se hace en dos fases:
+\begin{enumerate}
+    \item \textbf{Fase gruesa:} pocos valores, muy separados, desde el valor
+    por defecto de cada parámetro hasta valores extremos. Sirve para
+    localizar la zona buena y ver dónde el modelo se queda corto
+    (subajuste) y dónde se ajusta demasiado al entrenamiento
+    (sobreajuste).
+    \item \textbf{Fase fina:} valores más cercanos alrededor de la mejor
+    zona de la fase gruesa.
+\end{enumerate}
+No garantiza encontrar los mejores valores posibles, porque el acierto
+podría tener máximos fuera de los valores probados, pero permite explorar
+rangos razonables con un coste asumible.
+ 
+\paragraph{Elección del modelo final.} \texttt{CrossValidator} se queda
+con la combinación de mayor acierto medio y la vuelve a entrenar con todo el
+entrenamiento. A diferencia del entregable individual, en el que cada
+\ac{DT} se comparaba a mano con el margen de ruido para elegir el más
+sencillo, aquí la elección es automática y sigue un único criterio: el
+mayor acierto medio. El margen de ruido se usa para interpretar los
+resultados, no para cambiar la elección.
+ 
+ 
+\subsubsection{Árbol de decisión}
+\label{sec:seleccion-dt}
+ 
+El \ac{DT} es el modelo básico del trabajo. Clasifica cada viaje con una
+serie de preguntas sobre sus atributos (por ejemplo, ``¿la distancia es
+menor que 3 km?''), organizadas en forma de árbol, hasta llegar a una hoja
+que da la clase~\cite{spark_dt}. Se empieza por él porque es rápido y fácil
+de interpretar, así que sirve de referencia para comparar el modelo
+avanzado. Además, el \ac{RF} está formado por árboles de este mismo tipo,
+y lo que se aprende aquí sobre la profundidad y el tamaño de las hojas sirve
+para orientar su búsqueda.
+ 
+\paragraph{Parámetros que se exploran.} Se exploran los dos parámetros que
+controlan el tamaño del árbol:
+\begin{itemize}
+    \item \texttt{maxDepth}: número máximo de preguntas seguidas desde la
+    raíz hasta una hoja. Un árbol más profundo puede aprender reglas más
+    detalladas, pero también ajustarse a casos particulares del
+    entrenamiento.
+    \item \texttt{minInstancesPerNode}: número mínimo de viajes que tiene
+    que quedar en cada nodo después de una división; si una división dejara
+    menos, no se hace. Con valores pequeños se permiten hojas muy
+    específicas; con valores grandes el árbol se simplifica y puede perder
+    detalle.
+\end{itemize}
+Los dos controlan lo mismo desde lados distintos, cuánto puede crecer el
+árbol, y por eso se exploran juntos.
+ 
+\paragraph{Parámetros fijos.}
+\begin{itemize}
+    \item \texttt{maxBins} = 32 (valor por defecto). Es el número de
+    intervalos en que se divide cada atributo continuo para buscar los
+    cortes. En el entregable individual cada integrante del grupo lo
+    analizó, y todos llegaron a la misma conclusión: con la misma
+    profundidad, cambiarlo modificaba el error en menos que el margen de
+    ruido, porque la distancia, el atributo que más separa las clases, se
+    divide bien con pocos cortes. Incluirlo en la rejilla multiplicaría el
+    número de combinaciones (por tres, si se probaran tres valores) sin
+    esperar ninguna mejora, y con más intervalos cada árbol tarda más y usa
+    más memoria.
+    \item \texttt{impurity} = \texttt{gini} (valor por defecto). Es la medida
+    con la que se elige la mejor pregunta en cada nodo. La alternativa,
+    \texttt{entropy}, suele dar árboles muy parecidos.
+    \item \texttt{minInfoGain} = 0 (valor por defecto). No se exige una
+    mejora mínima para dividir un nodo; así, el tamaño de las hojas lo
+    controla solo \texttt{minInstancesPerNode}, que sí se explora.
+\end{itemize}
+La tabla~\ref{tab:rejilla-dt} resume las dos rejillas.
+ 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lll}
+\begin{tabular}{llll}
 \toprule
-\textbf{Fase} & \texttt{maxDepth} & \texttt{minInstancesPerNode} \\
+\textbf{Fase} & \texttt{maxDepth} & \texttt{minInstancesPerNode} & \textbf{Combinaciones} \\
 \midrule
-Gruesa & 5, 10, 15, 20, 25 & 1, 50, 100, 1000 \\
-Fina & 18, 21, 23, 25 & 25, 50, 75, 150 \\
+Gruesa & 5, 10, 15, 20, 25 & 1, 50, 100, 1000 & 20 \\
+Fina   & 18, 21, 23, 25    & 25, 50, 75, 150  & 16 \\
 \bottomrule
 \end{tabular}
 \caption{Rejillas de búsqueda del árbol de decisión.}
 \label{tab:rejilla-dt}
 \end{table}
-
-La búsqueda gruesa muestra que los árboles poco profundos (\texttt{maxDepth}
-= 5) obtienen un acierto medio de 0,7570. El mejor resultado de esa fase es
-0,7993, con profundidad 25 y un mínimo de 50 instancias por hoja. También
-se observa que permitir hojas de una sola instancia en árboles profundos
-empeora el resultado: con profundidad 25 el acierto baja a 0,7478. Esto es
-compatible con la hipótesis de que un árbol demasiado específico se ajusta
-a detalles de los pliegues de entrenamiento y generaliza peor. En el otro
-extremo, exigir 1000 instancias por hoja limita demasiado las divisiones y
-reduce el acierto.
-
-La búsqueda fina confirma que las mejores configuraciones están cerca de
-la profundidad máxima probada y de 50 instancias por hoja. El mejor acierto
-medio es 0,7993 (error medio 0,2007), obtenido con
-\texttt{maxDepth} = 25 y \texttt{minInstancesPerNode} = 50. Las
-configuraciones con profundidad 21 y 23 y el mismo tamaño mínimo obtienen
-también 0,7993 al redondear a cuatro decimales; se selecciona la que
-\texttt{CrossValidator} identifica como mejor en la ejecución, cuyo valor
-sin redondear es 0,799315. Los demás parámetros se mantienen fijos:
-\texttt{maxBins} = 32, \texttt{impurity} = \texttt{gini} y
-\texttt{minInfoGain} = 0. Se deja que el tamaño mínimo de hoja controle la
-complejidad, sin exigir una ganancia mínima adicional en cada división.
-
+ 
+\paragraph{Fase gruesa.} La profundidad va de 5, el valor por defecto, a
+25, en pasos de 5. Para el tamaño mínimo de hoja se prueba desde 1, el valor
+por defecto (sin límite), hasta 1000. Así se cubren los dos extremos:
+árboles que pueden llegar a memorizar viajes sueltos y árboles con hojas muy
+grandes. Los resultados están en la tabla~\ref{tab:dt-fase1} (3\,723\,s).
+ 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lrr}
+\begin{tabular}{rcccc}
 \toprule
-\textbf{Configuración} & \textbf{Acierto medio CV} & \textbf{Error medio CV} \\
+ & \multicolumn{4}{c}{\texttt{minInstancesPerNode}} \\
+\cmidrule(lr){2-5}
+\texttt{maxDepth} & 1 & 50 & 100 & 1000 \\
 \midrule
-Fase gruesa: profundidad 25, mínimo 50 & 0,7993 & 0,2007 \\
-Fase fina: profundidad 25, mínimo 50 & 0,7993 & 0,2007 \\
+5  & 0,7570 & 0,7570 & 0,7570 & 0,7570 \\
+10 & 0,7851 & 0,7851 & 0,7849 & 0,7813 \\
+15 & 0,7918 & 0,7966 & 0,7955 & 0,7857 \\
+20 & 0,7715 & 0,7992 & 0,7977 & 0,7859 \\
+25 & 0,7478 & \textbf{0,7993} & 0,7979 & 0,7859 \\
 \bottomrule
 \end{tabular}
-\caption{Mejor configuración del árbol en cada fase.}
-\label{tab:resultado-dt}
+\caption{Fase gruesa del árbol de decisión: acierto medio en la validación
+cruzada. En negrita, la mejor combinación.}
+\label{tab:dt-fase1}
 \end{table}
+ 
+\begin{itemize}
+    \item \textbf{Profundidad 5: subajuste.} Las cuatro combinaciones dan
+    exactamente 0,7570, el peor resultado de la tabla salvo los árboles que
+    sobreajustan. Que el tamaño mínimo de hoja no cambie nada indica que el
+    límite lo pone la profundidad: con 5 niveles el árbol tiene como mucho
+    $2^5 = 32$ hojas, y con unos 777\,000 viajes de entrenamiento cada hoja
+    tiene de media más de 24\,000, muy por encima de cualquiera de los
+    mínimos probados. Al pasar a profundidad 10 el acierto sube a 0,785: el
+    árbol de profundidad 5 era demasiado simple para separar las clases, es
+    decir, le faltaba capacidad.
+    \item \textbf{Hojas de 1 viaje: sobreajuste.} El acierto sube hasta
+    0,7918 con profundidad 15, pero luego baja: 0,7715 con 20 y 0,7478 con
+    25, peor incluso que con profundidad 5. Con hojas de un solo viaje, el
+    árbol aprende de memoria los viajes de entrenamiento, y eso no le sirve
+    con viajes nuevos. Con hojas más grandes esto no pasa.
+    \item \textbf{Hojas de 1000 viajes: el árbol se queda corto.} A partir
+    de profundidad 15 el acierto se queda en 0,786 aunque haya más niveles.
+    Las hojas no pueden tener menos de 1000 viajes, así que el árbol deja de
+    dividir y no aprende más detalle.
+    \item \textbf{Hojas de 50 y 100 viajes: los mejores resultados.} A
+    partir de profundidad 15 son las mejores, y 50 queda siempre por encima
+    de 100. La mejor combinación es (25, 50), con 0,7993, y casi empatada
+    está (20, 50), con 0,7992.
+\end{itemize}
+ 
+Por tanto, la mejor zona está en profundidades de 20 a 25 y en hojas de 50
+a 100 viajes.
+ 
+\paragraph{Fase fina.} Se prueban profundidades alrededor de 20--25. No se
+pasa de 25 porque de 20 a 25 el acierto solo sube 0,0001: el árbol ya no
+mejora con más niveles. Para el tamaño mínimo se prueban valores alrededor
+de 50: uno por debajo (25) y dos por encima (75 y 150). Los resultados
+están en la tabla~\ref{tab:dt-fase2} (6\,287\,s).
+ 
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{rcccc}
+\toprule
+ & \multicolumn{4}{c}{\texttt{minInstancesPerNode}} \\
+\cmidrule(lr){2-5}
+\texttt{maxDepth} & 25 & 50 & 75 & 150 \\
+\midrule
+18 & 0,7981 & 0,7986 & 0,7977 & 0,7955 \\
+21 & 0,7984 & 0,7993 & 0,7983 & 0,7961 \\
+23 & 0,7982 & 0,7993 & 0,7985 & 0,7962 \\
+25 & 0,7982 & \textbf{0,7993} & 0,7985 & 0,7962 \\
+\bottomrule
+\end{tabular}
+\caption{Fase fina del árbol de decisión: acierto medio en la validación
+cruzada. En negrita, la combinación que selecciona \texttt{CrossValidator}.}
+\label{tab:dt-fase2}
+\end{table}
+ 
+\begin{itemize}
+    \item El mínimo de \textbf{50 viajes} por hoja es el mejor con todas las
+    profundidades. Con 25 y 75 el acierto baja unas 0,001, y con 150 unas
+    0,003: con hojas más pequeñas el árbol empieza a sobreajustar, y con
+    hojas más grandes pierde detalle.
+    \item Con 50 viajes por hoja, las profundidades \textbf{21, 23 y 25} dan
+    el mismo acierto, 0,7993, y la 18 solo un poco menos (0,7986). A partir
+    de 21 el acierto ya no cambia.
+\end{itemize}
+ 
+La fase fina confirma la combinación de la fase gruesa: \texttt{CrossValidator}
+selecciona \texttt{maxDepth} = 25 y \texttt{minInstancesPerNode} = 50, con
+un acierto medio de 0,7993 (error 0,2007). La tabla~\ref{tab:dt-final}
+recoge el modelo final.
+ 
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Parámetro / resultado} & \textbf{Valor} \\
+\midrule
+\texttt{maxDepth} / \texttt{minInstancesPerNode} & 25 / 50 \\
+\texttt{maxBins} / \texttt{impurity} / \texttt{minInfoGain} & 32 / gini / 0 \\
+Acierto medio en validación cruzada & 0,7993 \\
+Error medio en validación cruzada & 0,2007 \\
+Profundidad real / número de nodos & 25 / 7\,601 \\
+\bottomrule
+\end{tabular}
+\caption{Modelo final del árbol de decisión.}
+\label{tab:dt-final}
+\end{table}
+ 
+\paragraph{Otra posible elección.} Las profundidades 21, 23 y 25 con un
+mínimo de 50 viajes por hoja obtienen el mismo acierto, 0,7993, y (18, 50)
+se queda en 0,7986. Cada acierto es una estimación, que depende de qué
+viajes han caído en cada pliegue. Aplicando la misma fórmula del intervalo
+de confianza que en la evaluación~\cite{mitchell1997}, con un acierto de
+0,7993, el margen al 95\,\% es:
+\[
+\pm\, 1{,}96 \sqrt{\frac{0{,}7993 \cdot 0{,}2007}{1\,165\,381}}
+= \pm\, 1{,}96 \cdot 0{,}00037
+\approx \pm\, 0{,}00073 .
+\]
+Se usan los 1\,165\,381 viajes del entrenamiento porque el acierto de cada
+combinación es la media de los tres pliegues, y entre los tres cada viaje
+se valida una vez. Por tanto, cualquier combinación con un acierto entre
+0,7986 y 0,8000 está empatada con la mejor: es el caso de estas cuatro, con
+(18, 50) justo en el límite. Además, al comparar tantas combinaciones con
+los mismos datos, alguna puede quedar primera solo por azar.
+\texttt{CrossValidator} elige la de mayor acierto, (25, 50), pero un árbol
+menos profundo, como (21, 50), habría dado prácticamente el mismo
+resultado.
 
-El modelo seleccionado tiene profundidad real 25 y 7\,601 nodos. La
-validación cruzada no muestra una mejora importante al aumentar la
-profundidad de 21 a 25, por lo que la elección de 25 debe entenderse como
-la mejor configuración dentro de la rejilla probada, no como prueba de que
-sea la profundidad óptima posible.
-
-
-\subsubsection{\textit{Random Forest}}
+\subsubsection{\textit{Random Forest}} \label{sec:seleccion-rf}
 El Random Forest combina varios árboles entrenados con muestras y
 selecciones de atributos aleatorias. La combinación de sus predicciones
 busca reducir la variabilidad de un árbol individual. En su configuración
@@ -475,135 +706,247 @@ entrenamiento de árboles profundos.
 
 
 \subsection{Evaluación de los modelos finales}
-% - Todas las métricas se calculan sobre el conjunto de prueba con ML y MLlib.
-% - Recordar cómo se calcula cada una (puede ir en una tabla común).
+\label{sec:evaluacion}
+
+Una vez elegidos los parámetros, cada modelo final se evalúa sobre el
+conjunto de prueba. Es la primera y única vez que se usa: no ha intervenido
+en la limpieza, en la transformación ni en la selección, así que sus
+resultados indican cómo se comportará el modelo con viajes nuevos. Primero
+se describe cómo se calcula cada métrica (sección~\ref{sec:eval-metodologia})
+y después los resultados del \ac{DT} (sección~\ref{sec:eval-dt}) y del
+\ac{RF} (sección~\ref{sec:eval-rf}).
+
 
 \subsubsection{Metodología común}
+\label{sec:eval-metodologia}
+
+Los dos modelos se evalúan exactamente igual. Como los dos se basan en
+árboles, usan la misma transformación de los datos
+(sección~\ref{sec:transformacion}), así que el conjunto de prueba se
+prepara una sola vez y sirve para ambos. Además, como las métricas son las
+mismas, se programan una sola vez y cada modelo tiene un script corto que
+las usa:
+
+\begin{itemize}
+    \item \texttt{evaluacionComun.scala} carga la preparación de datos, la
+    misma que en el entrenamiento, y define la función \texttt{evaluar},
+    que calcula todas las métricas.
+    \item \texttt{evaluarArbolDecision.scala} y
+    \texttt{evaluarRandomForest.scala} cargan el script común, leen el
+    modelo ya entrenado de \texttt{./modeloDT} o \texttt{./modeloRF}, sin
+    volver a crearlo, y llaman a \texttt{evaluar} con sus predicciones.
+\end{itemize}
+Así se evalúan los 291\,371 viajes de prueba limpios
+(tabla~\ref{tab:conjuntos-limpios}); los 418 eliminados en la limpieza son
+los no clasificados. La tabla~\ref{tab:metricas-eval} resume las mátricas evlaudas y cómo se calcula
+cada métrica. El error y las áreas se obtienen con la biblioteca ML, y la
+matriz de confusión y las métricas por clase con MLlib~\cite{spark_metricas}.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\centering\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}p{5.6cm}}
+\toprule
+\textbf{Métrica} & \textbf{Fórmula} & \textbf{Qué mide} \\
+\midrule
+Tasa de error & $e = \dfrac{\text{mal clasificados}}{n}$ & Proporción de viajes mal clasificados \\
+Intervalo al 95\,\% & $e \pm 1{,}96\sqrt{\dfrac{e(1-e)}{n}}$ & Dónde está el error verdadero \\
+Matriz de confusión & --- & Viajes de cada clase real según la clase predicha \\
+Tasa de \acs{TP} por clase & $\dfrac{\acs{TP}}{\acs{TP} + \acs{FN}}$ & Viajes de la clase que se reconocen \\
+Tasa de \acs{FP} por clase & $\dfrac{\acs{FP}}{\acs{FP} + \acs{TN}}$ & Viajes de otras clases que se predicen como esa \\
+Precisión por clase & $P = \dfrac{\acs{TP}}{\acs{TP} + \acs{FP}}$ & Aciertos entre los predichos como esa clase \\
+F-measure por clase & $F = \dfrac{2PR}{P+R}$ & Equilibrio entre precisión ($P$) y tasa de \acs{TP} ($R$) \\
+Áreas \acs{ROC} y \acs{PR} & Área bajo cada curva & Separación de \textit{long} frente al resto, con todos los umbrales \\
+Tasa de no clasificados & $\dfrac{\acs{NTAIE} + \acs{NTOE}}{n_{\text{prueba}}}$ & Viajes de prueba eliminados en la limpieza \\
+\bottomrule
+\end{tabular}
+\caption{Métricas de evaluación. En las métricas por clase, \acs{TP}, \acs{FN}, \acs{FP} y \acs{TN} se cuentan tomando esa clase como positiva y las otras dos como negativas.}
+\label{tab:metricas-eval}
+\end{table}
+\paragraph{\textit{Long} frente al resto.} Las curvas \acs{ROC} y \acs{PR}
+solo se definen para dos clases, así que se calculan para la minoritaria,
+\textit{long}, frente a las otras dos juntas. Se usa como puntuación la
+probabilidad de \textit{long} que da el modelo para cada viaje.
+
 
 \subsubsection{Árbol de decisión}
-% - Tasa de error, desviación estándar e intervalo de confianza al 95 %.
-% - Matriz de confusión (3 x 3).
-% - Tasa de verdaderos positivos y de falsos positivos por clase.
-% - F-measure por clase.
-% - Área bajo la curva ROC y curva ROC de la clase minoritaria (long)
-%   frente al resto.
-% - Área bajo la curva PR de long frente al resto.
-% - Tasa de no clasificados y comprobación de que es al menos 10 veces
-%   menor que el error.
-
-El rendimiento general del modelo sobre el conjunto de prueba arroja las siguientes métricas de error:
+\label{sec:eval-dt}
+ 
+\paragraph{Tasa de error e intervalo de confianza.} El \ac{DT} falla
+57\,770 de los 291\,371 viajes de prueba, una tasa de error de
+$e_S = 0{,}1983$. Es una estimación del error verdadero $e_D$ del modelo,
+que depende de qué viajes han caído en el conjunto de prueba. Cada viaje
+se trata como un ensayo en el que el modelo acierta o falla, así que el
+número de errores sigue una distribución binomial, que se puede aproximar
+por una normal si $n \geq 30$ y $n\,e_S(1-e_S) \geq 5$~\cite{mitchell1997}.
+Aquí se cumple de sobra: $291\,371 \cdot 0{,}1983 \cdot 0{,}8017 \approx
+46\,320$. Con esa aproximación:
+\[
+\sigma = \sqrt{\frac{0{,}1983 \cdot 0{,}8017}{291\,371}} \approx 0{,}00074,
+\qquad
+e_D \in 0{,}1983 \pm 1{,}96 \cdot 0{,}00074 = [0{,}1968;\ 0{,}1997] .
+\]
+Con un 95\,\% de confianza, el error verdadero del \ac{DT} está entre el
+19,68\,\% y el 19,97\,\%.
+ 
+\paragraph{Comparación con el entrenamiento y la validación cruzada.} La
+tabla~\ref{tab:errores-dt} compara el error del modelo en tres situaciones.
+ 
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Conjunto} & \textbf{Qué mide} & \textbf{Error} \\
+\midrule
+Entrenamiento (resustitución) & Viajes con los que se ha entrenado el modelo final & \textcolor{red}{0,19XX} \\
+Validación cruzada & Viajes que cada árbol no ha visto & 0,2007 \\
+Prueba & Viajes nuevos, no usados en ninguna decisión & 0,1983 \\
+\bottomrule
+\end{tabular}
+\caption{Error del árbol de decisión en entrenamiento, validación cruzada y prueba.}
+\label{tab:errores-dt}
+\end{table}
+ 
 \begin{itemize}
-    \item \textbf{Tasa de error ($e_S$):} $0.1983$ %
-    \item \textbf{Desviación estándar ($\sigma$):} $0.00074$ %
+    \item \textbf{Entrenamiento frente a prueba.} El error con los propios
+    viajes de entrenamiento es \textcolor{red}{0,19XX}, solo
+    \textcolor{red}{0,00XX} menos que en prueba. Si el árbol hubiera
+    memorizado el entrenamiento, ahí el error sería mucho menor que con
+    viajes nuevos. \textcolor{red}{Con una diferencia tan pequeña, el modelo
+    apenas sobreajusta: el mínimo de 50 viajes por hoja impide que aprenda
+    viajes sueltos.}
+    \item \textbf{Validación cruzada frente a prueba.} El error en prueba es
+    algo menor que el de la validación cruzada. Es lo esperable: en la
+    validación cruzada cada árbol se entrena con dos tercios del
+    entrenamiento, y el modelo final con todo, así que aprende algo más. Que
+    los dos estén tan cerca indica que la estimación de la validación
+    cruzada, con la que se eligieron los parámetros, era fiable.
 \end{itemize}
-
-La tasa de error obtenida es una estimación muestral del error verdadero del modelo ($e_D$). Para conocer el margen real de fiabilidad de esta métrica y saber qué diferencias de rendimiento podrían deberse al azar, calculamos un intervalo de confianza. Tratando la clasificación de cada registro como un ensayo de Bernoulli (el modelo acierta o falla), el conteo total de errores sigue una distribución binomial.
-
-Para aproximar esta distribución binomial a una distribución normal y aplicar su formulación, deben cumplirse las siguientes dos condiciones estadísticas:
-
-\begin{equation}
-    \begin{cases}
-        n \ge 30 \\
-        n p (1-p) \ge 5
-    \end{cases}
-\end{equation}
-
-Tomando la tasa de error observada como estimación de la probabilidad de fallo ($p \approx e_S = 0.1983$) sobre los $n = 291371$ registros del conjunto de prueba, ambas exigencias se cumplen:
-
-\begin{equation}
-    \begin{cases}
-        291371 \ge 30 \\
-        291371 \cdot 0.1983 \cdot (1 - 0.1983) \approx 46320 \ge 5
-    \end{cases}
-\end{equation}
-
-Al cumplirse estas condiciones, se utiliza la siguiente formulación para un nivel de confianza del $N$\%:
-
-\begin{equation}
-    e_{D}(h) \in e_{S}(h) \pm z_{N} \cdot \sigma, \quad \text{donde} \quad \sigma = \sqrt{\frac{e_{S}(h) (1-e_{S}(h))}{n}}
-\end{equation}
-
-Aplicando esta fórmula para una confianza del 95\% ($z_{95} = 1.96$) obtenemos:
-
-\begin{itemize}
-    \item \textbf{Intervalo de confianza (95\%):} $[0.1968, 0.1997]$ %
-\end{itemize}
-
-Destacamos que la tasa de error global (19.83\%) es más de diez veces superior a la tasa de registros no clasificados ($0.00143$), lo que valida la robustez de la métrica obtenida, ya que el error muestra limitaciones predictivas reales y no se encuentra artificialmente condicionado por los descartes.
-
-\subsubsection{Matriz de confusión y métricas por clase}
-En la Tabla \ref{tab:cm_dt_multi} se presenta la matriz de confusión multiclase, donde la diagonal principal recoge los Verdaderos Positivos (TP) de cada categoría. %
-
-\begin{table}[h]
+ 
+\paragraph{Referencias.} El error (0,1983) es mucho menor que el de un
+clasificador que dijera siempre \textit{short}, la clase más frecuente
+($1 - 0{,}4470 = 0{,}5530$). En cuanto a los no clasificados, el requisito
+es que el error sea al menos diez veces su tasa:
+\[
+10 \cdot 0{,}00143 = 0{,}0143 < 0{,}1983 ,
+\]
+y de hecho el error es unas 14 veces mayor ($0{,}1983 / 0{,}00143 \approx
+13{,}9$), así que se cumple: el resultado no depende de los viajes que se
+dejan sin clasificar.
+ 
+\paragraph{Matriz de confusión.} La tabla~\ref{tab:cm-dt} muestra cómo se
+clasifican los viajes de cada clase.
+ 
+\begin{table}[H]
 \centering
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{cc|c|c|c|}
 \cline{3-5}
-& & \multicolumn{3}{c|}{\textbf{Clase Predicha}} \\
+& & \multicolumn{3}{c|}{\textbf{Clase predicha}} \\
 \cline{3-5}
-& & \textbf{Short} & \textbf{Medium} & \textbf{Long} \\
+& & \textit{\textbf{short}} & \textit{\textbf{medium}} & \textit{\textbf{long}} \\
 \hline
-\multicolumn{1}{|c|}{\multirow{3}{*}{\textbf{Clase Real}}} & \textbf{Short} & \cellcolor{green!25}112.816 & 17.402 & 17 \\ %
+\multicolumn{1}{|c|}{\multirow{3}{*}{\textbf{Clase real}}} & \textit{\textbf{short}} & \cellcolor{green!25}112\,816 & 17\,402 & 17 \\
 \cline{2-5}
-\multicolumn{1}{|c|}{} & \textbf{Medium} & 22.036 & \cellcolor{green!25}97.537 & 5.842 \\ %
+\multicolumn{1}{|c|}{} & \textit{\textbf{medium}} & 22\,036 & \cellcolor{green!25}97\,537 & 5\,842 \\
 \cline{2-5}
-\multicolumn{1}{|c|}{} & \textbf{Long} & 736 & 11.737 & \cellcolor{green!25}23.248 \\ %
+\multicolumn{1}{|c|}{} & \textit{\textbf{long}} & 736 & 11\,737 & \cellcolor{green!25}23\,248 \\
 \hline
 \end{tabular}
-\caption{Matriz de confusión multiclase para el modelo Árbol de Decisión.}
-\label{tab:cm_dt_multi}
+\caption{Matriz de confusión del árbol de decisión en el conjunto de
+prueba. En verde, los viajes bien clasificados.}
+\label{tab:cm-dt}
 \end{table}
+ 
+Casi todos los errores son entre clases vecinas: \textit{short} con
+\textit{medium} y \textit{medium} con \textit{long}. \textit{Short} y
+\textit{long} apenas se confunden: solo 17 viajes cortos se predicen como
+largos y 736 largos como cortos. Es lo esperable, porque las clases salen
+de cortar la duración en 10 y 25 minutos: un viaje de 24 minutos y otro de
+26 son casi iguales, pero caen en clases distintas.
+  
+\paragraph{Métricas por clase.} La tabla~\ref{tab:metricas-dt} recoge las
+tasas y la F-measure de cada clase.
 
-A partir de la matriz, se extraen las métricas desglosadas por clase (Tabla \ref{tab:metricas_dt}), las cuales permiten observar el comportamiento del modelo frente al desequilibrio original de los datos.
-
-\begin{table}[h]
+\begin{table}[H]
 \centering
+\small
 \begin{tabular}{lccc}
 \toprule
-\textbf{Clase} & \textbf{TPR} & \textbf{FPR} & \textbf{F-Measure (F1)} \\ 
+\textbf{Clase} & \textbf{Tasa de \acs{TP}} & \textbf{Tasa de \acs{FP}} & \textbf{F-measure} \\
 \midrule
-Short & 0.8662 & 0.1413 & 0.8488 \\ %
-Medium & 0.7777 & 0.1756 & 0.7738 \\ %
-Long & 0.6508 & 0.0229 & 0.7172 \\ %
+\textit{short}  & 0,8662 & 0,1413 & 0,8488 \\
+\textit{medium} & 0,7777 & 0,1756 & 0,7738 \\
+\textit{long}   & 0,6508 & 0,0229 & 0,7172 \\
 \bottomrule
 \end{tabular}
-\caption{Métricas de rendimiento por clase del Árbol de Decisión.}
-\label{tab:metricas_dt}
+\caption{Métricas por clase del árbol de decisión en el conjunto de prueba.}
+\label{tab:metricas-dt}
 \end{table}
-\newpage
-El valor F-Measure alcanza su máximo en la clase mayoritaria (\textit{short}, 0.8488) debido al mayor volumen de ejemplos que facilita la creación de reglas precisas. A medida que descendemos hacia las clases \textit{medium} y \textit{long}, la métrica disminuye de forma esperable por el desequilibrio del conjunto de datos. Sin embargo, el F1 de la clase \textit{long} (0.7172) demuestra una buena capacidad predictiva. Destaca su reducida tasa de falsos positivos (FPR = 0.0229), que indica que el modelo es bueno al clasificar un viaje como largo: cuando predice esta clase, su probabilidad de acierto es muy alta, a costa de dejar algunos viajes largos sin detectar (Falsos Negativos).
-
-\subsubsection{Evaluación de la clase minoritaria (Long frente al resto)}
-Dado que la clase \textit{long} representa la minoritaria en este conjunto de datos (aproximadamente un 12.26\% tras la limpieza), analizamos su rendimiento aislando esta categoría frente a las demás.
-La Tabla \ref{tab:cm_dt_bin} muestra la matriz de confusión adaptada para este enfoque binario.
-
-\begin{table}[h]
+ 
+\begin{itemize}
+    \item \textbf{\textit{Short}} es la clase mejor clasificada: el árbol
+    reconoce el 86,6\,\% de los viajes cortos.
+    \item \textbf{\textit{Medium}} tiene casi tantos viajes como
+    \textit{short}, pero peores resultados. No se debe a su tamaño, sino a
+    que es la clase intermedia: se confunde con las dos que tiene a los
+    lados, y por eso tiene la tasa de \acs{FP} más alta.
+    \item \textbf{\textit{Long}} es el punto débil: el árbol solo reconoce
+    el 65,1\,\% de los viajes largos, y casi todos los demás los predice
+    como \textit{medium} (11\,737). En cambio, su tasa de \acs{FP} es muy
+    baja (0,0229): casi nunca predice \textit{long} para un viaje que no lo
+    es, y cuando lo hace acierta en el 79,9\,\% de los casos. Es decir, es
+    prudente con esta clase: prefiere quedarse corto antes que equivocarse.
+\end{itemize}
+ 
+\paragraph{\textit{Long} frente al resto.} La tabla~\ref{tab:cm-dt-long}
+agrupa la matriz de confusión en \textit{long} frente a las otras dos
+clases.
+ 
+\begin{table}[H]
 \centering
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{cc|c|c|}
 \cline{3-4}
-& & \multicolumn{2}{c|}{\textbf{Clase Predicha}} \\
+& & \multicolumn{2}{c|}{\textbf{Clase predicha}} \\
 \cline{3-4}
-& & \textbf{Long} & \textbf{Short o Medium} \\
+& & \textit{\textbf{long}} & \textbf{Resto} \\
 \hline
-\multicolumn{1}{|c|}{\multirow{2}{*}{\textbf{Clase Real}}} & \textbf{Long} & \cellcolor{green!25}23.248 (TP) & \cellcolor{red!25}12.473 (FN) \\
+\multicolumn{1}{|c|}{\multirow{2}{*}{\textbf{Clase real}}} & \textit{\textbf{long}} & \cellcolor{green!25}23\,248 (\acs{TP}) & \cellcolor{red!25}12\,473 (\acs{FN}) \\
 \cline{2-4}
-\multicolumn{1}{|c|}{} & \textbf{Resto} & \cellcolor{red!25}5.859 (FP) & \cellcolor{green!25}249.791 (TN) \\ 
+\multicolumn{1}{|c|}{} & \textbf{Resto} & \cellcolor{red!25}5\,859 (\acs{FP}) & \cellcolor{green!25}249\,791 (\acs{TN}) \\
 \hline
 \end{tabular}
-\caption{Matriz de confusión binaria (clase Long frente al resto).}
-\label{tab:cm_dt_bin}
+\caption{Matriz de confusión del árbol de decisión para \textit{long}
+frente al resto.}
+\label{tab:cm-dt-long}
 \end{table}
-
-Para evaluar la capacidad del clasificador de distinguir esta clase minoritaria, se han obtenido las siguientes áreas: %
+ 
+Esta matriz corresponde a un solo umbral: el árbol predice \textit{long}
+cuando es la clase más probable. Las curvas recorren todos los umbrales
+posibles, y sus áreas resumen cada curva en un número:
 \begin{itemize}
-    \item \textbf{Área bajo la curva ROC (ROC AUC):} $0.9471$ %
-    \item \textbf{Área bajo la curva PR (PR AUC):} $0.8031$ %
+    \item \textbf{Área bajo la curva \acs{ROC}: 0,9471.} Resume en un solo
+    número lo bien que el árbol separa los viajes \textit{long} del resto,
+    sea cual sea el umbral: en el 94,7\,\% de las parejas (viaje
+    \textit{long}, viaje que no lo es), da más probabilidad de \textit{long}
+    al primero. Un clasificador al azar daría 0,5, y uno perfecto, 1.
+    \item \textbf{Área bajo la curva \acs{PR}: 0,8031.} Mide cuántos de los
+    viajes que el árbol marca como \textit{long} lo son de verdad, a medida
+    que se detectan más. No cuenta los \acs{TN}. Un clasificador al azar
+    daría la proporción de \textit{long}, 0,1226, y uno perfecto, 1.
 \end{itemize}
+Como el resto es mucho más numeroso que \textit{long}, un área \acs{ROC}
+alta podría deberse en parte a acertar muchos \acs{TN}; el área \acs{PR},
+que no los cuenta, confirma que el árbol también identifica bien los viajes
+\textit{long}. Las dos áreas son altas aunque la tasa de \acs{TP} de
+\textit{long} sea solo 0,65: el árbol ordena bien los viajes, pero con el
+umbral por defecto deja fuera muchos \textit{long}.
+ 
 
-Un área ROC de 0.9471 demuestra una muy buena capacidad de discriminación global, indicando que el modelo asigna una mayor probabilidad de ser \textit{long} a un viaje largo real frente a uno de otra clase en casi el 95\% de los casos. No obstante, al tratarse de un problema fuertemente desequilibrado, el área bajo la curva PR es la métrica más rigurosa. El valor obtenido de 0.8031 en PR AUC confirma finalmente que el buen rendimiento del clasificador no se deriva de la gran cantidad de Verdaderos Negativos (TN), sino que el modelo identifica bien los casos positivos de la clase minoritaria.
-
-\subsubsection{\textit{Random Forest}}
+\subsubsection{\textit{Random Forest}}\label{sec:eval-rf}
 % - Las mismas métricas que para el árbol de decisión.
 
 \subsubsection{Comparación de los dos modelos}
