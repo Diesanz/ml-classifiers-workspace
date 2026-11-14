@@ -151,16 +151,30 @@
 \section{Introducción}
 % =====================================================================
 
-Este trabajo corresponde a la tercera etapa del proyecto de clasificación en Spark. Su objetivo es crear, seleccionar y evaluar dos modelos finales que clasifiquen los viajes del conjunto \textit{New York City Taxi Trip Duration} según su duración en tres clases: \textit{short} (hasta 10 minutos), \textit{medium} (hasta 25) y \textit{long} (más de 25). Es, por tanto, un problema de clasificación multiclase. A diferencia de lo que se proponía en el entregable individual, donde se permitía convertir el problema en binario, aquí se mantienen las tres clases, para que el problema sea el mismo que el planteado en el primer entregable.
+Este trabajo corresponde a la tercera etapa del proyecto de clasificación en Spark. Su objetivo es crear, seleccionar y evaluar dos modelos finales que clasifiquen los viajes del conjunto \textit{New York City Taxi Trip Duration} según su duración en tres clases: \textit{short} (hasta 10 minutos), \textit{medium} (hasta 25) y \textit{long} (más de 25). Es, por tanto, un problema de clasificación multiclase. A diferencia de lo que se proponía en el entregable individual, donde se permitía convertir el problema en binario, aquí se mantienen las tres clases, para que el problema sea el mismo que el planteado en el primer entregable.\\
 
-Se construyen dos modelos de Spark ML:
+De los dos modelos, al menos uno tiene que ser un clasificador avanzado, y
+el otro puede ser básico. Se han elegido dos modelos de Spark ML:
 \begin{itemize}
-    \item un \textbf{\ac{DT}}, como modelo básico;
-    \item un \textbf{\ac{RF}}, como modelo avanzado. Combina muchos árboles para reducir el sobreajuste de uno solo y admite directamente las tres clases, a diferencia de otros modelos de Spark, como los \textit{Gradient-Boosted Trees}, que solo admiten clasificación binaria.
+    \item un \textbf{\ac{DT}}, como modelo básico
+    (sección~\ref{sec:seleccion-dt});
+    \item un \textbf{\ac{RF}}, como modelo avanzado
+    (sección~\ref{sec:seleccion-rf}). Combina muchos árboles para reducir el
+    sobreajuste de uno solo y admite directamente las tres clases, a
+    diferencia de otros modelos de Spark, como los \textit{Gradient-Boosted
+    Trees}, que solo admiten clasificación binaria.
 \end{itemize}
-Uno de los objetivos es comparar cómo se comportan dos modelos distintos con los mismos datos: si el modelo avanzado mejora de verdad al básico y a qué coste.\\
+Uno de los objetivos es comparar cómo se comportan dos modelos distintos con
+los mismos datos: si el modelo avanzado mejora de verdad al básico y a qué
+coste\\
 
-Respecto al primer entregable, \cambio{que hemos actualizado y enviado junto con este documento,} se revisan la limpieza y la transformación: se eliminan muchos menos viajes y cambia el cálculo de la distancia. Además, para seleccionar los parámetros de cada modelo se usan las utilidades de Spark ML: \texttt{ParamGridBuilder}, que construye una rejilla con todas las combinaciones de valores que se quieren probar, y \texttt{CrossValidator}, que evalúa cada combinación mediante validación cruzada. En la validación cruzada, el conjunto de entrenamiento se divide en varias partes (pliegues). Cada combinación se entrena varias veces, dejando cada vez un pliegue distinto para validar, y se hace la media. Así, cada viaje se usa una vez para validar y el resultado no depende de la suerte de una única división entre entrenamiento y validación. La búsqueda se hace en dos pasos: primero una rejilla gruesa, con valores muy separados, y después una fina alrededor de los mejores.\\
+Respecto al primer entregable, \cambio{que hemos actualizado y enviado junto
+con este documento,} se revisan la limpieza y la transformación: se eliminan
+muchos menos viajes y cambia el cálculo de la distancia. Para seleccionar
+los parámetros de cada modelo se usan las utilidades de Spark ML
+(\texttt{ParamGridBuilder} y \texttt{CrossValidator}), con validación
+cruzada y una búsqueda en dos fases: primero una rejilla gruesa, con valores
+muy separados, y después una fina alrededor de los mejores.\\
 
 La sección~\ref{sec:resumen} resume el conjunto de datos. La sección~\ref{sec:trabajo} describe el trabajo realizado: los conjuntos de entrenamiento y prueba, la limpieza y la transformación revisadas, la creación y selección de cada modelo y su evaluación sobre el conjunto de prueba.
 
@@ -190,7 +204,11 @@ La sección~\ref{sec:resumen} resume el conjunto de datos. La sección~\ref{sec:
 \label{sec:trabajo}
 % =====================================================================
 
-Esta sección sigue las fases del proyecto. Las tres primeras (conjuntos, limpieza y transformación) parten del primer entregable: se resume lo que se mantiene y se detallan las correcciones, que aparecen \cambio{en azul}.
+Esta sección sigue las fases del proyecto. Las tres primeras (conjuntos,
+limpieza y transformación) preparan los datos y parten del primer
+entregable: se resume lo que se mantiene y se detallan las correcciones,
+que aparecen \cambio{en azul}. Las dos últimas aprovechan esos datos ya
+preparados para crear y seleccionar los modelos y, después, evaluarlos.
 
 \subsection{Conjuntos de entrenamiento y prueba}
 \label{sec:conjuntos}
@@ -340,9 +358,10 @@ Mes & Descartar (solo seis meses) & Igual \\
 
 \subsection{Creación y selección de modelos}
 \label{sec:seleccion}
- 
-En esta fase se construyen los dos modelos finales y se eligen los valores
-de sus parámetros. Un mismo algoritmo da modelos muy distintos según cómo se
+
+Con los datos ya limpios y transformados, se pasa a construir los modelos.
+En esta fase se crean los dos modelos finales y se eligen los valores de
+sus parámetros. Un mismo algoritmo da modelos muy distintos según cómo se
 configure: un árbol poco profundo no aprende lo suficiente y uno demasiado
 profundo memoriza el entrenamiento. Por eso, para cada modelo se prueban
 varias combinaciones de valores, se estima el error de cada una y se elige
@@ -586,9 +605,15 @@ a 100 viajes.
 \paragraph{Fase fina.} Se prueban profundidades alrededor de 20--25. No se
 pasa de 25 porque de 20 a 25 el acierto solo sube 0,0001: el árbol ya no
 mejora con más niveles. Para el tamaño mínimo se prueban valores alrededor
-de 50: uno por debajo (25) y dos por encima (75 y 150). Los resultados
-están en la tabla~\ref{tab:dt-fase2} (6\,287\,s).
- 
+de 50: uno por debajo (25) y dos por encima (75 y 150). Así, la
+profundidad 25, que ya dio el mejor resultado, se vuelve a probar con
+tamaños de hoja que no estaban en la fase gruesa, para ver si con alguno
+mejora. La rejilla incluye también la mejor combinación de la fase gruesa,
+(25, 50), porque \texttt{CrossValidator} solo compara las combinaciones de
+su propia rejilla: tiene que estar en ella para que la fase fina pueda
+elegirla si sigue siendo la mejor. Los resultados están en la
+tabla~\ref{tab:dt-fase2} (6\,287\,s).
+
 \begin{table}[H]
 \centering
 \small
@@ -621,8 +646,10 @@ cruzada. En negrita, la combinación que selecciona \texttt{CrossValidator}.}
  
 La fase fina confirma la combinación de la fase gruesa: \texttt{CrossValidator}
 selecciona \texttt{maxDepth} = 25 y \texttt{minInstancesPerNode} = 50, con
-un acierto medio de 0,7993 (error 0,2007). La tabla~\ref{tab:dt-final}
-recoge el modelo final.
+un acierto medio de 0,7993 (error 0,2007). Es exactamente el mismo valor
+que en la fase gruesa, como corresponde al usar los mismos pliegues, lo que
+confirma que los resultados de las dos fases se pueden comparar. La
+tabla~\ref{tab:dt-final} recoge el modelo final.
  
 \begin{table}[H]
 \centering
@@ -649,7 +676,7 @@ viajes han caído en cada pliegue. Aplicando la misma fórmula del intervalo
 de confianza que en la evaluación~\cite{mitchell1997}, con un acierto de
 0,7993, el margen al 95\,\% es:
 \[
-\pm\, 1{,}96 \sqrt{\frac{0{,}7993 \cdot 0{,}2007}{1\,165\,381}}
+\pm\, 1{,}96 \sqrt{\frac{0{,}7993 \cdot 0{,}2007}{3 \cdot {388\,000}}}
 = \pm\, 1{,}96 \cdot 0{,}00037
 \approx \pm\, 0{,}00073 .
 \]
@@ -942,9 +969,11 @@ Como el resto es mucho más numeroso que \textit{long}, un área \acs{ROC}
 alta podría deberse en parte a acertar muchos \acs{TN}; el área \acs{PR},
 que no los cuenta, confirma que el árbol también identifica bien los viajes
 \textit{long}. Las dos áreas son altas aunque la tasa de \acs{TP} de
-\textit{long} sea solo 0,65: el árbol ordena bien los viajes, pero con el
-umbral por defecto deja fuera muchos \textit{long}.
- 
+\textit{long} sea solo 0,65. Un área alta indica que el modelo puede
+clasificar bien los \textit{long}, pero solo si el umbral está bien
+elegido; con un umbral mal puesto los clasificará mal igualmente. Es lo que
+ocurre aquí: el árbol ordena bien los viajes, pero con el umbral por
+defecto deja fuera muchos \textit{long}.
 
 \subsubsection{\textit{Random Forest}}\label{sec:eval-rf}
 % - Las mismas métricas que para el árbol de decisión.
@@ -966,9 +995,52 @@ umbral por defecto deja fuera muchos \textit{long}.
 % =====================================================================
 \section{Reparto del trabajo}
 % =====================================================================
-% - Tabla con el porcentaje de trabajo y las horas de cada estudiante.
-% - Opcional: qué parte ha hecho cada uno.
 
+Entre el 6 y el 15 de noviembre el grupo ha hecho unas cuatro reuniones de
+unas dos horas cada una. En ellas se revisaba lo que había hecho cada uno,
+se organizaban las siguientes tareas y, en algunos casos, se programaba
+en conjunto.
+
+El reparto ha sido el siguiente:
+\begin{itemize}
+    \item \textbf{Limpieza y exploración.} Diego ha revisado la limpieza:
+    ha modificado el análisis exploratorio en el \textit{notebook} de
+    Python, que solo analiza los datos sin modificarlos, como en el primer
+    entregable, y ha llevado los cambios al script de preparación de datos
+    en Scala.
+    \item \textbf{Creación y selección de modelos.} Diego ha programado la
+    mayor parte de los scripts de creación del \ac{DT} y del \ac{RF}, y
+    Gonzalo y Paula han ayudado a programarlos. Los valores de los
+    parámetros y las rejillas de búsqueda se han decidido entre los tres.
+    \item \textbf{Evaluación.} Gonzalo y Paula han programado la mayor
+    parte de los scripts de evaluación. La evaluación de los modelos y el
+    análisis de sus resultados se han hecho a partes iguales entre los
+    tres.
+    \item \textbf{Memoria.} Se ha redactado entre los tres: cada uno ha
+    escrito unos apartados, y todos los apartados los han revisado los
+    tres.
+\end{itemize}
+
+La tabla~\ref{tab:reparto} recoge las horas de cada integrante, incluidas
+las reuniones, y el porcentaje del trabajo total.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{7.2cm} r r}
+\toprule
+\textbf{Estudiante} & \textbf{Tareas principales} & \textbf{Horas} & \textbf{\%} \\
+\midrule
+Gonzalo Agúndez Sáez & Scripts de evaluación, evaluación y análisis de los modelos, apoyo en los scripts de creación, memoria & 21 & 32,8 \\
+Paula Negro Asegurado & Scripts de evaluación, evaluación y análisis de los modelos, apoyo en los scripts de creación, memoria & 21 & 32,8 \\
+Diego Sanz Santos & Coordinación, revisión de la limpieza y de la exploración, preparación de datos, scripts de creación del \acs{DT} y del \acs{RF}, evaluación y análisis de los modelos, memoria & 22 & 34,4 \\
+\midrule
+\textbf{Total} & & \textbf{64} & \textbf{100} \\
+\bottomrule
+\end{tabular}
+\caption{Reparto del trabajo entre los integrantes del grupo.}
+\label{tab:reparto}
+\end{table}
 
 % =====================================================================
 \newpage
@@ -978,16 +1050,5 @@ umbral por defecto deja fuera muchos \textit{long}.
 \bibliographystyle{unsrt}  % numeradas por orden de aparición en el texto
 \bibliography{referencias}
 
-% =====================================================================
-\appendix
-% =====================================================================
-
-\section{Scripts entregados}
-% - Lista de scripts: qué hace cada uno y en qué orden se ejecutan.
-% - Variables PATH y FILE, y carpetas de los modelos (./modeloDT, ./modeloRF).
-
-\section{Resultados completos de la validación cruzada}
-% - Tablas completas de avgMetrics de todas las combinaciones probadas,
-%   si en el texto solo se muestran las más relevantes.
 
 \end{document}
