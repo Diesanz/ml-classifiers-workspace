@@ -3,6 +3,7 @@
 % --- Paquetes básicos ---
 \usepackage[utf8]{inputenc}     % Acentos
 \usepackage[T1]{fontenc}
+\usepackage{lmodern} 
 \usepackage[spanish,es-tabla]{babel}     % Idioma
 \usepackage{geometry}           % Márgenes
 \usepackage{graphicx}           % Imágenes
@@ -475,13 +476,25 @@ podría tener máximos fuera de los valores probados, pero permite explorar
 rangos razonables con un coste asumible.
  
 \paragraph{Elección del modelo final.} \texttt{CrossValidator} se queda
-con la combinación de mayor acierto medio y la vuelve a entrenar con todo el
-entrenamiento. A diferencia del entregable individual, en el que cada
+con la combinación de mayor acierto medio y la vuelve a entrenar con todo
+el entrenamiento. A diferencia del entregable individual, en el que cada
 \ac{DT} se comparaba a mano con el margen de ruido para elegir el más
-sencillo, aquí la elección es automática y sigue un único criterio: el
-mayor acierto medio. El margen de ruido se usa para interpretar los
-resultados, no para cambiar la elección.
- 
+sencillo, aquí se ha optado por una elección automática, con un único
+criterio: el mayor acierto medio. El margen de ruido se usa para
+interpretar los resultados, no para cambiar la elección.
+
+\paragraph{Recursos de cálculo.} Todo el trabajo se ejecuta en una máquina
+virtual con 4 núcleos y 15\,GiB de memoria, de los que unos 11\,GiB quedan
+libres. En modo local, Spark usa por defecto solo 1\,GiB para el
+\textit{driver}, que en este modo hace también de ejecutor y, por tanto,
+tiene toda la memoria de Spark~\cite{spark_configuracion}. Con el \ac{DT}
+ese valor suele bastar, pero en alguna ejecución con árboles profundos la
+validación cruzada se quedó colgada a mitad. Con el \ac{RF}, en cambio,
+es imprescindible más memoria (sección~\ref{sec:seleccion-rf}). Por eso
+las ejecuciones finales de los dos modelos se han hecho con
+\texttt{--driver-memory 8g}, el máximo razonable con 11\,GiB libres, que
+deja unos 3\,GiB para el sistema operativo. Este valor se fija al arrancar
+Spark y no se puede cambiar desde el código.
  
 \subsubsection{Árbol de decisión}
 \label{sec:seleccion-dt}
@@ -525,11 +538,19 @@ Los dos controlan lo mismo desde lados distintos, cuánto puede crecer el
     más memoria.
     \item \texttt{impurity} = \texttt{gini} (valor por defecto). Es la medida
     con la que se elige la mejor pregunta en cada nodo. La alternativa,
-    \texttt{entropy}, suele dar árboles muy parecidos.
+    \texttt{entropy}, suele dar resultados muy parecidos, y no suele
+    compensar dedicar tiempo a comparar las dos~\cite[cap.~3]{raschka2022}.
     \item \texttt{minInfoGain} = 0 (valor por defecto). No se exige una
     mejora mínima para dividir un nodo; así, el tamaño de las hojas lo
     controla solo \texttt{minInstancesPerNode}, que sí se explora.
 \end{itemize}
+
+Además, la validación cruzada entrena dos árboles a la vez
+(\texttt{setParallelism(2)}), lo que reduce el tiempo a la tercera parte
+respecto a entrenarlos de uno en uno. No se entrenan más a la vez porque la
+máquina tiene 4 núcleos, que se reparten entre los modelos, así que el
+tiempo apenas bajaría y aumentaría el riesgo de quedarse sin memoria.
+
 La tabla~\ref{tab:rejilla-dt} resume las dos rejillas.
  
 \begin{table}[H]
@@ -551,7 +572,9 @@ Fina   & 18, 21, 23, 25    & 25, 50, 75, 150  & 16 \\
 25, en pasos de 5. Para el tamaño mínimo de hoja se prueba desde 1, el valor
 por defecto (sin límite), hasta 1000. Así se cubren los dos extremos:
 árboles que pueden llegar a memorizar viajes sueltos y árboles con hojas muy
-grandes. Los resultados están en la tabla~\ref{tab:dt-fase1} (3\,723\,s).
+grandes. Los resultados están en la tabla~\ref{tab:dt-fase1} (3\,795\,s; los
+tiempos son orientativos, porque varían entre ejecuciones según la carga de
+la máquina).
  
 \begin{table}[H]
 \centering
@@ -612,7 +635,7 @@ mejora. La rejilla incluye también la mejor combinación de la fase gruesa,
 (25, 50), porque \texttt{CrossValidator} solo compara las combinaciones de
 su propia rejilla: tiene que estar en ella para que la fase fina pueda
 elegirla si sigue siendo la mejor. Los resultados están en la
-tabla~\ref{tab:dt-fase2} (6\,287\,s).
+tabla~\ref{tab:dt-fase2} (3\,507\,s).
 
 \begin{table}[H]
 \centering
@@ -668,6 +691,7 @@ Profundidad real / número de nodos & 25 / 7\,601 \\
 \caption{Modelo final del árbol de decisión.}
 \label{tab:dt-final}
 \end{table}
+
  
 \paragraph{Otra posible elección.} Las profundidades 21, 23 y 25 con un
 mínimo de 50 viajes por hoja obtienen el mismo acierto, 0,7993, y (18, 50)
@@ -676,7 +700,7 @@ viajes han caído en cada pliegue. Aplicando la misma fórmula del intervalo
 de confianza que en la evaluación~\cite{mitchell1997}, con un acierto de
 0,7993, el margen al 95\,\% es:
 \[
-\pm\, 1{,}96 \sqrt{\frac{0{,}7993 \cdot 0{,}2007}{3 \cdot {388\,000}}}
+\pm\, 1{,}96 \sqrt{\frac{0{,}7993 \cdot 0{,}2007}{1\,165\,381}}
 = \pm\, 1{,}96 \cdot 0{,}00037
 \approx \pm\, 0{,}00073 .
 \]
@@ -690,46 +714,236 @@ los mismos datos, alguna puede quedar primera solo por azar.
 menos profundo, como (21, 50), habría dado prácticamente el mismo
 resultado.
 
-\subsubsection{\textit{Random Forest}} \label{sec:seleccion-rf}
-El Random Forest combina varios árboles entrenados con muestras y
-selecciones de atributos aleatorias. La combinación de sus predicciones
-busca reducir la variabilidad de un árbol individual. En su configuración
-se estudian el número de árboles, su profundidad máxima y el tamaño mínimo
-de las hojas.
+\subsubsection{\textit{Random Forest}}
+\label{sec:seleccion-rf}
 
-En la búsqueda gruesa se prueba el producto de dos números de árboles y
-tres profundidades, manteniendo fijo el tamaño mínimo de hoja en 50. En la
-búsqueda fina se exploran tres profundidades y dos tamaños mínimos de hoja.
-El número de árboles se fija en 20 para esta segunda fase ya
-que pasar de 20 a 50 apenas mejoró el acierto en la primera fase y aumentó
-considerablemente el tiempo.
+El \ac{RF} es el modelo avanzado del trabajo. Pertenece a la familia de los
+\textit{ensembles}, que combinan muchos modelos en uno, y en concreto al
+\textit{bagging} (\textit{bootstrap aggregating}): entrenar muchos modelos,
+cada uno con una muestra distinta de los datos, y hacer la media de sus
+predicciones. El \ac{RF} aplica esta idea a árboles de decisión como el de
+la sección~\ref{sec:seleccion-dt} y añade un segundo elemento de
+azar~\cite{spark_rf}:
+\begin{itemize}
+    \item cada árbol usa una muestra \textit{bootstrap} del entrenamiento:
+    los viajes se sacan al azar con reemplazo, así que cada árbol ve unos
+    viajes repetidos y le faltan otros;
+    \item en cada nodo solo se puede elegir entre unos pocos atributos
+    sorteados, no entre los ocho.
+\end{itemize}
+Así los árboles salen distintos entre sí y se equivocan en viajes
+distintos. Para predecir, el bosque hace la media de las probabilidades de
+todos sus árboles, y esos errores se compensan en parte. Visto con el
+sesgo (cuánto se aleja la media de las predicciones del valor real) y la
+varianza (cuánto se dispersan las predicciones alrededor de su propia
+media), un árbol profundo tiene poco sesgo pero mucha varianza, y al hacer
+la media de muchos árboles distintos la varianza baja sin que suba el
+sesgo.
+
+\paragraph{Por qué el \ac{RF}.} Los \textit{Gradient-Boosted Trees}, que
+combinan árboles con \textit{boosting}, solo admiten clasificación binaria
+en Spark. Naive Bayes supone que los atributos son independientes, y aquí
+no lo son (la distancia sale de las coordenadas). El \ac{RF}, en cambio, admite directamente las tres clases, capta
+relaciones no lineales, usa la misma transformación que el \ac{DT}
+(sección~\ref{sec:transformacion}) y está formado por los mismos árboles,
+así que permite aprovechar lo aprendido con el \ac{DT}.
+
+\paragraph{Parámetros que se exploran.}
+\begin{itemize}
+    \item \texttt{numTrees}: número de árboles del bosque. Con más árboles
+    la media es más estable, pero el tiempo y la memoria crecen en
+    proporción.
+    \item \texttt{maxDepth} y \texttt{minInstancesPerNode}: controlan el
+    tamaño de cada árbol del bosque, igual que en el \ac{DT}. En un \ac{RF}
+    los árboles pueden ser más complejos que en un \ac{DT}, porque la media
+    compensa el sobreajuste de cada uno. Spark no admite profundidades
+    mayores que 30: su implementación de los árboles solo funciona hasta
+    ese valor, y rechaza directamente valores mayores~\cite{spark_maxdepth}.
+\end{itemize}
+
+\paragraph{Parámetros fijos.}
+\begin{itemize}
+    \item \texttt{maxBins} = 32: número de intervalos en que se divide cada
+    atributo continuo para buscar los cortes. Como se vio en el \ac{DT}
+    (sección~\ref{sec:seleccion-dt}), cambiarlo apenas modifica el error, y
+    meterlo en la rejilla multiplicaría el número de bosques que hay que
+    entrenar.
+    \item \texttt{impurity} = \texttt{gini}: la medida con la que se elige
+    la mejor pregunta en cada nodo, la misma que en el \ac{DT}, para que
+    los árboles de los dos modelos se construyan con el mismo criterio.
+    \item \texttt{featureSubsetStrategy} = \texttt{sqrt}: número de
+    atributos que se sortean en cada nodo, $\sqrt{8} \approx 3$, el valor
+    habitual en clasificación. Por ejemplo, si en un nodo salen
+    \texttt{distance\_km}, \texttt{pickup\_hour} y \texttt{pickup\_day}, el
+    árbol elegirá seguramente la distancia; pero si en otro nodo salen
+    \texttt{pickup\_latitude}, \texttt{pickup\_hour} y
+    \texttt{passenger\_count}, tendrá que usar otro atributo, como la hora.
+    Sin este sorteo, todos los árboles empezarían por la distancia,
+    saldrían muy parecidos y la media apenas serviría.
+    \item \texttt{bootstrap} = \texttt{true} y \texttt{subsamplingRate} =
+    1,0: cada árbol usa una muestra con reemplazo del mismo tamaño que el
+    entrenamiento.
+    \item Semilla 2627: fija las muestras y los sorteos, para que el
+    resultado sea reproducible. Con la misma semilla en
+    \texttt{CrossValidator}, los pliegues son los mismos que en el \ac{DT}.
+    \item \texttt{cacheNodeIds} = \texttt{true}: guarda a qué nodo va cada
+    viaje para no recalcularlo en cada nivel. Spark lo recomienda con
+    árboles profundos~\cite{spark_mllib_dt}; solo acelera el entrenamiento y no
+    cambia el resultado.
+\end{itemize}
+Además, la validación cruzada entrena un solo modelo cada vez
+(\texttt{setParallelism(1)}). En el \ac{DT} se entrenaban dos a la vez, es
+decir, dos árboles; en el \ac{RF}, cada modelo es un bosque de 20 o 50
+árboles, así que entrenar dos a la vez supondría tener entre 40 y 100
+árboles profundos en memoria al mismo tiempo, y podría agotarla.
+
+La tabla~\ref{tab:rejilla-rf} resume las dos rejillas.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{llll}
+\begin{tabular}{lllll}
 \toprule
-\textbf{Fase} & \texttt{numTrees} & \texttt{maxDepth} &
-\texttt{minInstancesPerNode} \\
+\textbf{Fase} & \texttt{numTrees} & \texttt{maxDepth} & \texttt{minInstancesPerNode} & \textbf{Combinaciones} \\
 \midrule
-Gruesa & 20, 50 & 10, 15, 20 & 50 (fijo) \\
-Fina & 20 (fijo) & 20, 25, 30 & 10, 50 \\
+Gruesa & 20, 50    & 10, 15, 20 & 50 (fijo) & 6 \\
+Fina   & 20 (fijo) & 20, 25, 30 & 10, 50    & 6 \\
 \bottomrule
 \end{tabular}
 \caption{Rejillas de búsqueda del \textit{Random Forest}.}
 \label{tab:rejilla-rf}
 \end{table}
 
-Se mantienen fijos \texttt{maxBins} = 32 e \texttt{impurity} =
-\texttt{gini}, para usar el mismo criterio de división que en el árbol.
-\texttt{featureSubsetStrategy} = \texttt{sqrt} hace que cada división
-considere una parte de los atributos (aproximadamente $\sqrt{8}$), lo que
-favorece que los árboles del bosque sean diferentes. Se usa muestreo
-\textit{bootstrap} con reemplazo (\texttt{bootstrap} = \texttt{true}) y
-\texttt{subsamplingRate} = 1.0. La semilla 2627 hace reproducibles las
-muestras aleatorias. Se activa \texttt{cacheNodeIds} para acelerar el
-entrenamiento de árboles profundos.
+\paragraph{Fase gruesa.} Cada combinación entrena un bosque entero en cada
+uno de los tres pliegues, así que el coste es mucho mayor que en el
+\ac{DT}: con solo 6 combinaciones, la fase gruesa ya tarda más de dos
+horas. Por eso no se exploran a la vez los tres parámetros, y se aprovecha
+lo aprendido con el \ac{DT}:
+\begin{itemize}
+    \item \textbf{\texttt{numTrees}: 20 y 50.} Es el parámetro propio del
+    \ac{RF}, y el que hay que explorar primero: un bosque pequeño y otro
+    mediano, para ver si compensa usar muchos árboles.
+    \item \textbf{\texttt{maxDepth}: 10, 15 y 20.} Es la zona en la que el
+    \ac{DT} pasaba de quedarse corto a dar sus mejores resultados.
+    \item \textbf{\texttt{minInstancesPerNode} fijo en 50,} el mejor valor
+    del \ac{DT}. Se fija al crear el modelo, sin meterlo en la rejilla, para
+    no multiplicar las combinaciones.
+\end{itemize}
+Los resultados están en la tabla~\ref{tab:rf-fase1} (7\,577\,s).
 
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{rcc}
+\toprule
+ & \multicolumn{2}{c}{\texttt{numTrees}} \\
+\cmidrule(lr){2-3}
+\texttt{maxDepth} & 20 & 50 \\
+\midrule
+10 & 0,7775 & 0,7800 \\
+15 & 0,8001 & 0,8009 \\
+20 & 0,8076 & \textbf{0,8085} \\
+\bottomrule
+\end{tabular}
+\caption{Fase gruesa del \textit{Random Forest} (\texttt{minInstancesPerNode}
+= 50): acierto medio en la validación cruzada. En negrita, la mejor
+combinación.}
+\label{tab:rf-fase1}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{La profundidad es lo que más influye.} El acierto sube de
+    0,778 con profundidad 10 a 0,808 con 20, y no deja de subir: el mejor
+    valor está en el borde de la rejilla.
+    \item \textbf{El número de árboles apenas influye.} Pasar de 20 a 50
+    árboles solo mejora 0,0008--0,0009 con profundidad 15 y 20, en el
+    límite del margen de ruido ($\pm 0{,}0007$, calculado como en el
+    \ac{DT}), y el bosque tarda más del doble en entrenarse.
+    \item Con la misma profundidad y el mismo tamaño de hoja, el bosque ya
+    mejora al \ac{DT}: con profundidad 20, 0,8076 frente a 0,7992.
+\end{itemize}
+
+\paragraph{Paso a la fase fina.} De la fase gruesa salen tres
+conclusiones, y cada una decide un parámetro de la fase fina:
+\begin{enumerate}
+    \item \textbf{50 árboles no compensan}, así que \texttt{numTrees} se
+    fija en 20. Ese tiempo se dedica a explorar los otros dos parámetros.
+    \item \textbf{La profundidad no ha llegado a su máximo}, porque el
+    acierto seguía subiendo en 20. Se amplía a 25 y 30, que es el límite de
+    Spark, y se mantiene el 20 como referencia.
+    \item \textbf{Dar más capacidad a los árboles mejora el bosque.} Como la
+    media del bosque compensa el sobreajuste de cada árbol, puede que
+    también mejore con hojas más pequeñas que las del \ac{DT}. Por eso
+    \texttt{minInstancesPerNode} entra en la rejilla, con 10 y con el 50 de
+    la fase gruesa como referencia.
+\end{enumerate}
+
+\paragraph{Fase fina.} Los resultados están en la
+tabla~\ref{tab:rf-fase2} (22\,908\,s).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{rcc}
+\toprule
+ & \multicolumn{2}{c}{\texttt{minInstancesPerNode}} \\
+\cmidrule(lr){2-3}
+\texttt{maxDepth} & 10 & 50 \\
+\midrule
+20 & 0,8127 & 0,8076 \\
+25 & 0,8148 & 0,8087 \\
+30 & \textbf{0,8150} & 0,8088 \\
+\bottomrule
+\end{tabular}
+\caption{Fase fina del \textit{Random Forest} (\texttt{numTrees} = 20):
+acierto medio en la validación cruzada. En negrita, la combinación que
+selecciona \texttt{CrossValidator}.}
+\label{tab:rf-fase2}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{Las hojas de 10 viajes son mejores que las de 50} con
+    todas las profundidades, unas 0,006 más. Es lo contrario que en el
+    \ac{DT}, donde las hojas pequeñas sobreajustaban: en el bosque, cada
+    árbol sobreajusta más, pero la media de los 20 lo compensa.
+    \item \textbf{La profundidad deja de mejorar a partir de 25}: de 25 a
+    30 el acierto solo sube 0,0002, menos que el margen de ruido.
+    \item La combinación (20 árboles, 20, 50) da 0,8076, exactamente lo
+    mismo que en la fase gruesa, lo que confirma que las dos fases se pueden
+    comparar.
+\end{itemize}
+
+\texttt{CrossValidator} selecciona 20 árboles con \texttt{maxDepth} = 30 y
+\texttt{minInstancesPerNode} = 10, con un acierto medio de 0,8150 (error
+0,1850). Mejora en 0,0066 a la mejor combinación de la fase gruesa, que
+además usaba 50 árboles. La tabla~\ref{tab:rf-final} recoge el modelo
+final.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Parámetro / resultado} & \textbf{Valor} \\
+\midrule
+\texttt{numTrees} / \texttt{maxDepth} / \texttt{minInstancesPerNode} & 20 / 30 / 10 \\
+\texttt{maxBins} / \texttt{impurity} / \texttt{featureSubsetStrategy} & 32 / gini / sqrt \\
+Acierto medio en validación cruzada & 0,8150 \\
+Error medio en validación cruzada & 0,1850 \\
+Nodos totales del bosque & 1\,041\,664 \\
+\bottomrule
+\end{tabular}
+\caption{Modelo final del \textit{Random Forest}.}
+\label{tab:rf-final}
+\end{table}
+
+\paragraph{Otra posible elección y límites de la búsqueda.} Con el mismo
+margen de ruido que en el \ac{DT} ($\pm 0{,}0007$), (25, 10) está empatada
+con (30, 10): un bosque menos profundo habría dado prácticamente el mismo
+resultado. Además, 10 es el tamaño de hoja más pequeño probado, y valores
+menores podrían mejorar algo más; no se han probado porque el bosque ya
+tiene más de un millón de nodos (137 veces más que el \ac{DT}) y la fase
+fina ya tardó más de seis horas.
 
 
 \subsection{Evaluación de los modelos finales}
@@ -827,7 +1041,7 @@ tabla~\ref{tab:errores-dt} compara el error del modelo en tres situaciones.
 \toprule
 \textbf{Conjunto} & \textbf{Qué mide} & \textbf{Error} \\
 \midrule
-Entrenamiento (resustitución) & Viajes con los que se ha entrenado el modelo final & \textcolor{red}{0,19XX} \\
+Entrenamiento (resustitución) & Viajes con los que se ha entrenado el modelo final & 0,1866 \\
 Validación cruzada & Viajes que cada árbol no ha visto & 0,2007 \\
 Prueba & Viajes nuevos, no usados en ninguna decisión & 0,1983 \\
 \bottomrule
@@ -838,12 +1052,11 @@ Prueba & Viajes nuevos, no usados en ninguna decisión & 0,1983 \\
  
 \begin{itemize}
     \item \textbf{Entrenamiento frente a prueba.} El error con los propios
-    viajes de entrenamiento es \textcolor{red}{0,19XX}, solo
-    \textcolor{red}{0,00XX} menos que en prueba. Si el árbol hubiera
-    memorizado el entrenamiento, ahí el error sería mucho menor que con
-    viajes nuevos. \textcolor{red}{Con una diferencia tan pequeña, el modelo
+    viajes de entrenamiento es 0,1866, solo 0,0117 menos que en prueba. Si
+    el árbol hubiera memorizado el entrenamiento, ahí el error sería mucho
+    menor que con viajes nuevos. Con una diferencia tan pequeña, el modelo
     apenas sobreajusta: el mínimo de 50 viajes por hoja impide que aprenda
-    viajes sueltos.}
+    viajes sueltos.
     \item \textbf{Validación cruzada frente a prueba.} El error en prueba es
     algo menor que el de la validación cruzada. Es lo esperable: en la
     validación cruzada cada árbol se entrena con dos tercios del
@@ -859,8 +1072,8 @@ es que el error sea al menos diez veces su tasa:
 \[
 10 \cdot 0{,}00143 = 0{,}0143 < 0{,}1983 ,
 \]
-y de hecho el error es unas 14 veces mayor ($0{,}1983 / 0{,}00143 \approx
-13{,}9$), así que se cumple: el resultado no depende de los viajes que se
+y de hecho el error es unas 139 veces mayor ($0{,}1983 / 0{,}00143 \approx
+139$), así que se cumple: el resultado no depende de los viajes que se
 dejan sin clasificar.
  
 \paragraph{Matriz de confusión.} La tabla~\ref{tab:cm-dt} muestra cómo se
@@ -965,31 +1178,352 @@ posibles, y sus áreas resumen cada curva en un número:
     que se detectan más. No cuenta los \acs{TN}. Un clasificador al azar
     daría la proporción de \textit{long}, 0,1226, y uno perfecto, 1.
 \end{itemize}
-Como el resto es mucho más numeroso que \textit{long}, un área \acs{ROC}
-alta podría deberse en parte a acertar muchos \acs{TN}; el área \acs{PR},
-que no los cuenta, confirma que el árbol también identifica bien los viajes
-\textit{long}. Las dos áreas son altas aunque la tasa de \acs{TP} de
-\textit{long} sea solo 0,65. Un área alta indica que el modelo puede
-clasificar bien los \textit{long}, pero solo si el umbral está bien
-elegido; con un umbral mal puesto los clasificará mal igualmente. Es lo que
-ocurre aquí: el árbol ordena bien los viajes, pero con el umbral por
-defecto deja fuera muchos \textit{long}.
+\paragraph{Observaciones.} Como \textit{long} es una clase pequeña, el
+área \acs{ROC} se ve favorecida por los muchos viajes de otras clases que
+son fáciles de descartar. El área \acs{PR} no, porque solo se fija en los
+viajes \textit{long}, y que también sea alta confirma que el árbol
+reconoce bien esta clase.
 
-\subsubsection{\textit{Random Forest}}\label{sec:eval-rf}
-% - Las mismas métricas que para el árbol de decisión.
+Aun así, con el umbral por defecto el árbol solo detecta el 65\,\% de los
+\textit{long} (tabla~\ref{tab:metricas-dt}). Que las áreas sean altas
+indica que, con un umbral mejor elegido, ese valor sería mayor: el árbol
+ya ordena bien los viajes, y solo falta ajustar a partir de qué
+probabilidad dice \textit{long}. A cambio, por ejemplo, bajar ese umbral podría hacer que
+algunos viajes \textit{medium} pasaran a predecirse como \textit{long} por
+error.
+
+\subsubsection{\textit{Random Forest}}
+\label{sec:eval-rf}
+
+\paragraph{Tasa de error e intervalo de confianza.} El \ac{RF} falla
+53\,461 de los 291\,371 viajes de prueba, una tasa de error de
+$e_S = 0{,}1835$. Como en el \ac{DT}, la aproximación normal se cumple de
+sobra ($291\,371 \cdot 0{,}1835 \cdot 0{,}8165 \approx 43\,650$), así que:
+\[
+\sigma = \sqrt{\frac{0{,}1835 \cdot 0{,}8165}{291\,371}} \approx 0{,}00072,
+\qquad
+e_D \in 0{,}1835 \pm 1{,}96 \cdot 0{,}00072 = [0{,}1821;\ 0{,}1849] .
+\]
+Con un 95\,\% de confianza, el error verdadero del \ac{RF} está entre el
+18,21\,\% y el 18,49\,\%.
+
+\paragraph{Comparación con el entrenamiento y la validación cruzada.} La
+tabla~\ref{tab:errores-rf} compara el error del modelo en tres situaciones.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Conjunto} & \textbf{Qué mide} & \textbf{Error} \\
+\midrule
+Entrenamiento (resustitución) & Viajes con los que se ha entrenado el modelo final & 0,1541 \\
+Validación cruzada & Viajes que cada bosque no ha visto & 0,1850 \\
+Prueba & Viajes nuevos, no usados en ninguna decisión & 0,1835 \\
+\bottomrule
+\end{tabular}
+\caption{Error del \textit{Random Forest} en entrenamiento, validación
+cruzada y prueba.}
+\label{tab:errores-rf}
+\end{table}
+
+\begin{itemize}
+        \item \textbf{Entrenamiento frente a prueba.} El error con los propios
+    viajes de entrenamiento es 0,1541, 0,0294 menos que en prueba: el
+    bosque sobreajusta, bastante más que el \ac{DT} (0,0117). Es lo
+    esperable con árboles de profundidad 30 y hojas de solo 10 viajes.
+    Además, en un \ac{RF} este error sale especialmente bajo: cada viaje del
+    entrenamiento ha estado en la muestra de cerca del 63\,\% de los
+    árboles, así que, al predecirlo, la mayoría de los árboles ya lo
+    conocen. Ese 63\,\% sale de que la probabilidad de que un viaje no
+    salga en una muestra con reemplazo de $n$ viajes es
+    $(1 - 1/n)^n \approx e^{-1} \approx 0{,}37$~\cite{raschka2022}.
+    \item \textbf{Ese sobreajuste no perjudica a los viajes nuevos.} Si se
+    reduce, usando hojas de 50 viajes, el error en validación cruzada
+    empeora: 0,1912 en lugar de 0,1850. Es decir, con menos sobreajuste el
+    bosque clasifica peor los viajes que no ha visto.
+\end{itemize}
+
+\paragraph{Referencias.} El error (0,1835) es mucho menor que el del
+clasificador que dice siempre \textit{short} (0,5530). En cuanto a los no
+clasificados:
+\[
+10 \cdot 0{,}00143 = 0{,}0143 < 0{,}1835 ,
+\]
+así que se cumple el requisito: el error es unas 128 veces la tasa de no
+clasificados.
+
+\paragraph{Matriz de confusión.} La tabla~\ref{tab:cm-rf} muestra cómo se
+clasifican los viajes de cada clase.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{cc|c|c|c|}
+\cline{3-5}
+& & \multicolumn{3}{c|}{\textbf{Clase predicha}} \\
+\cline{3-5}
+& & \textit{\textbf{short}} & \textit{\textbf{medium}} & \textit{\textbf{long}} \\
+\hline
+\multicolumn{1}{|c|}{\multirow{3}{*}{\textbf{Clase real}}} & \textit{\textbf{short}} & \cellcolor{green!25}114\,319 & 15\,907 & 9 \\
+\cline{2-5}
+\multicolumn{1}{|c|}{} & \textit{\textbf{medium}} & 20\,483 & \cellcolor{green!25}100\,082 & 4\,850 \\
+\cline{2-5}
+\multicolumn{1}{|c|}{} & \textit{\textbf{long}} & 705 & 11\,507 & \cellcolor{green!25}23\,509 \\
+\hline
+\end{tabular}
+\caption{Matriz de confusión del \textit{Random Forest} en el conjunto de
+prueba. En verde, los viajes bien clasificados.}
+\label{tab:cm-rf}
+\end{table}
+
+El patrón es el mismo que en el \ac{DT}: casi todos los errores son entre
+clases vecinas, y \textit{short} y \textit{long} apenas se confunden (9
+viajes cortos predichos como largos y 705 largos como cortos). El \ac{RF}
+acierta más en las tres clases, sobre todo en \textit{short} y
+\textit{medium}.
+
+\paragraph{Métricas por clase.} La tabla~\ref{tab:metricas-rf} recoge las
+tasas y la F-measure de cada clase.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Clase} & \textbf{Tasa de \acs{TP}} & \textbf{Tasa de \acs{FP}} & \textbf{F-measure} \\
+\midrule
+\textit{short}  & 0,8778 & 0,1315 & 0,8604 \\
+\textit{medium} & 0,7980 & 0,1652 & 0,7914 \\
+\textit{long}   & 0,6581 & 0,0190 & 0,7336 \\
+\bottomrule
+\end{tabular}
+\caption{Métricas por clase del \textit{Random Forest} en el conjunto de
+prueba.}
+\label{tab:metricas-rf}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{\textit{Short}} sigue siendo la clase mejor clasificada:
+    el bosque reconoce el 87,8\,\% de los viajes cortos.
+    \item \textbf{\textit{Medium}} vuelve a tener la tasa de \acs{FP} más
+    alta, por ser la clase intermedia, aunque baja respecto al \ac{DT}.
+    \item \textbf{\textit{Long}} sigue siendo el punto débil: el bosque solo
+    reconoce el 65,8\,\% de los viajes largos, y casi todos los demás los
+    predice como \textit{medium} (11\,507). Su tasa de \acs{FP} es todavía
+    más baja que en el \ac{DT} (0,0190): cuando el bosque dice
+    \textit{long}, acierta en el 82,9\,\% de los casos
+    ($23\,509 / 28\,368$).
+\end{itemize}
+
+\paragraph{\textit{Long} frente al resto.} La tabla~\ref{tab:cm-rf-long}
+agrupa la matriz de confusión en \textit{long} frente a las otras dos
+clases.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{cc|c|c|}
+\cline{3-4}
+& & \multicolumn{2}{c|}{\textbf{Clase predicha}} \\
+\cline{3-4}
+& & \textit{\textbf{long}} & \textbf{Resto} \\
+\hline
+\multicolumn{1}{|c|}{\multirow{2}{*}{\textbf{Clase real}}} & \textit{\textbf{long}} & \cellcolor{green!25}23\,509 (\acs{TP}) & \cellcolor{red!25}12\,212 (\acs{FN}) \\
+\cline{2-4}
+\multicolumn{1}{|c|}{} & \textbf{Resto} & \cellcolor{red!25}4\,859 (\acs{FP}) & \cellcolor{green!25}250\,791 (\acs{TN}) \\
+\hline
+\end{tabular}
+\caption{Matriz de confusión del \textit{Random Forest} para \textit{long}
+frente al resto.}
+\label{tab:cm-rf-long}
+\end{table}
+
+Las áreas obtenidas son:
+\begin{itemize}
+    \item \textbf{Área bajo la curva \acs{ROC}: 0,9551}: en el 95,5\,\% de
+    las parejas (viaje \textit{long}, viaje que no lo es), el bosque da más
+    probabilidad de \textit{long} al primero. El azar daría 0,5.
+    \item \textbf{Área bajo la curva \acs{PR}: 0,8322}, frente al 0,1226 del
+    azar.
+\end{itemize}
+Las dos son mayores que en el \ac{DT}, así que el bosque separa mejor los
+viajes \textit{long} del resto, sea cual sea el umbral. Sin embargo, con
+el umbral por defecto su tasa de \acs{TP} de \textit{long} (0,658) es
+prácticamente la misma: igual que el árbol, el bosque ordena bien los
+viajes, pero con ese umbral deja fuera un tercio de los \textit{long}.
 
 \subsubsection{Comparación de los dos modelos}
-% - Tabla con las métricas de los dos modelos lado a lado.
-% - ¿La diferencia de error es real? (comparar los intervalos de confianza).
-% - Coste (tiempo de entrenamiento, tamaño del modelo) frente a mejora.
+\label{sec:comparacion}
 
+La tabla~\ref{tab:comparacion} reúne los resultados de los dos modelos.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Métrica} & \textbf{\ac{DT}} & \textbf{\ac{RF}} \\
+\midrule
+Error en prueba & 0,1983 & \textbf{0,1835} \\
+Intervalo al 95\,\% & [0,1968; 0,1997] & [0,1821; 0,1849] \\
+Error en validación cruzada & 0,2007 & 0,1850 \\
+Error en entrenamiento & 0,1866 & 0,1541 \\
+\midrule
+F-measure \textit{short} / \textit{medium} / \textit{long} & 0,849 / 0,774 / 0,717 & 0,860 / 0,791 / 0,734 \\
+Tasa de \acs{TP} de \textit{long} & 0,651 & 0,658 \\
+Área \acs{ROC} / \acs{PR} (\textit{long}) & 0,947 / 0,803 & \textbf{0,955} / \textbf{0,832} \\
+\midrule
+Nodos del modelo & 7\,601 & 1\,041\,664 \\
+Tiempo de la búsqueda (dos fases) & unas 2 h & unas 8,5 h \\
+\bottomrule
+\end{tabular}
+\caption{Comparación de los dos modelos finales. Las métricas, salvo los
+errores de validación cruzada y de entrenamiento, se calculan sobre el
+conjunto de prueba.}
+\label{tab:comparacion}
+\end{table}
+
+\paragraph{¿Hay alguna mejora del \ac{RF} respecto al \ac{DT}?} El \ac{RF} reduce el error en prueba
+en 0,0148, es decir, 4\,309 viajes más bien clasificados ($57\,770$ fallos
+del \ac{DT} frente a $53\,461$ del \ac{RF}), y los dos intervalos
+de confianza no se solapan: el peor caso del \ac{RF} (0,1849) sigue por
+debajo del mejor caso del \ac{DT} (0,1968). Además, la mejora coincide con
+la que ya se veía en la validación cruzada (0,2007 frente a 0,1850), así
+que no depende de los viajes que han caído en el conjunto de prueba.
+
+\paragraph{Dónde mejora.} El \ac{RF} es mejor en todas las métricas, pero
+no en todas por igual:
+\begin{itemize}
+    \item Mejora sobre todo en \textit{short} y \textit{medium}: acierta
+    unos 1\,500 viajes cortos y 2\,500 medios más.
+    \item En \textit{long} apenas detecta más viajes (tasa de \acs{TP} de
+    0,651 a 0,658), pero se equivoca menos cuando dice \textit{long}
+    (precisión de 0,799 a 0,829) y separa mejor esta clase del resto, como
+    muestran las áreas \acs{ROC} y \acs{PR}.
+    \item El punto débil es el mismo en los dos modelos: un tercio de los
+    viajes \textit{long} se clasifican como \textit{medium}. Con los
+    atributos disponibles, ninguno de los dos distingue bien los viajes
+    que están cerca de los 25 minutos.
+\end{itemize}
+
+\paragraph{Diferencia de coste.} La mejora tiene un precio alto. El bosque tiene
+unas 137 veces más nodos que el árbol, su búsqueda de parámetros tardó
+unas cuatro veces más y necesita bastante más memoria. También es más
+lento al predecir, porque cada viaje pasa por 20 árboles, y mucho más
+difícil de interpretar: el \ac{DT} se puede leer como una serie de reglas,
+y el \ac{RF} no. Además, sobreajusta más (0,029 entre entrenamiento y
+prueba, frente a 0,012), aunque, como se vio, eso no empeora su error con
+viajes nuevos.
+
+Si lo que importa es el error, el \ac{RF} es el mejor modelo. Si importan
+el tamaño, la rapidez o poder explicar las decisiones, el \ac{DT} da un
+resultado no mucho peor, con un error solo 1,5 puntos mayor.
+
+\paragraph{Importancia de los atributos.} Spark calcula cuánto contribuye
+cada atributo a reducir el índice de Gini en todas las divisiones, y lo
+normaliza para que la suma sea 1. La tabla~\ref{tab:importancia} compara
+los dos modelos.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Atributo} & \textbf{\ac{DT}} & \textbf{\ac{RF}} \\
+\midrule
+\texttt{distance\_km}       & 0,7359 & 0,5546 \\
+\texttt{pickup\_hour}       & 0,1041 & 0,1035 \\
+\texttt{pickup\_longitude}  & 0,0209 & 0,0854 \\
+\texttt{dropoff\_latitude}  & 0,0548 & 0,0745 \\
+\texttt{dropoff\_longitude} & 0,0243 & 0,0732 \\
+\texttt{pickup\_latitude}   & 0,0177 & 0,0546 \\
+\texttt{pickup\_day}        & 0,0422 & 0,0454 \\
+\texttt{passenger\_count}   & 0,0002 & 0,0087 \\
+\bottomrule
+\end{tabular}
+\caption{Importancia de los atributos en los dos modelos finales.}
+\label{tab:importancia}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{La distancia es el atributo principal en los dos}, como
+    ya se vio en la exploración del primer entregable, pero en el \ac{RF}
+    pesa bastante menos (0,55 frente a 0,74).
+    \item \textbf{Las coordenadas pesan más en el \ac{RF}}: entre las cuatro
+    pasan de 0,12 a 0,29. Es el efecto del sorteo de atributos: en los
+    nodos donde la distancia no sale elegida, el árbol tiene que usar otro
+    atributo, y así el bosque aprende también de las zonas de recogida y
+    destino. Puede ser parte de la razón por la que mejora al \ac{DT}.
+    \item \textbf{La hora y el día pesan lo mismo en los dos} (0,10 y
+    0,04): a la misma distancia, un viaje tarda más en las horas y los días
+    de más tráfico.
+    \item \textbf{El número de pasajeros casi no aporta} en ninguno de los
+    dos.
+\end{itemize}
 
 % =====================================================================
 \section{Conclusiones}
+\label{sec:conclusiones}
 % =====================================================================
-% - Qué modelo es mejor y por qué.
-% - Efecto de los cambios de limpieza.
-% - Limitaciones y posibles mejoras.
+
+El \ac{RF} es el mejor de los dos modelos: su error en prueba es 0,1835,
+frente a 0,1983 del \ac{DT}, una mejora real porque los intervalos de
+confianza no se solapan. A cambio, es unas 137 veces más grande, su
+búsqueda tardó unas cuatro veces más y no se puede interpretar. El
+\ac{DT}, mucho más sencillo, falla solo un 1,5\,\% más de viajes (19,83\,\%
+frente a 18,35\,\%).
+
+La revisión de la limpieza ha funcionado: al eliminar solo los registros
+imposibles, la tasa de no clasificados baja del 1,00\,\% al 0,143\,\%, y
+los modelos aprenden también de viajes raros pero reales, que aparecerán
+igual con datos nuevos. Además, como los dos modelos se basan en árboles,
+ninguno ha necesitado una limpieza ni una transformación distintas: los dos
+usan los mismos datos, lo que simplifica los scripts y hace la comparación
+más justa.
+
+\paragraph{Limitaciones.}
+\begin{itemize}
+    \item Los dos modelos fallan en lo mismo: un tercio de los viajes
+    \textit{long} se clasifican como \textit{medium}. Con los atributos
+    disponibles, no se pueden separar bien los viajes cercanos a los 25
+    minutos.
+    \item La selección de parámetros solo tiene en cuenta el acierto medio
+    en la validación cruzada. Otras características, como el tamaño del
+    modelo, el tiempo de entrenamiento o el sobreajuste, no intervienen en
+    la elección.
+    \item El número de pasajeros apenas aporta en ninguno de los dos
+    modelos.
+\end{itemize}
+
+\paragraph{Posibles mejoras.}
+\begin{itemize}
+    \item \textbf{Ajustar el umbral de \textit{long}.} Las áreas \acs{ROC} y
+    \acs{PR} son altas, así que bajando el umbral se detectarían más viajes
+    \textit{long} sin muchos más errores.
+    \item \textbf{Probar otras selecciones de atributos.} La importancia de
+    los atributos indica cuáles usa más cada modelo, pero para saber si
+    alguno sobra habría que volver a entrenar sin él (por ejemplo, sin el
+    número de pasajeros) y comprobar si el error se mantiene o mejora y si
+    el tiempo se reduce.
+    \item \textbf{Usar otros criterios de selección}, como quedarse con el
+    modelo más sencillo dentro del margen de ruido, en lugar del de mayor
+    acierto. Para ello harían falta datos de cada combinación que
+    \texttt{CrossValidator} no devuelve, como su tamaño (por ejemplo, el
+    número de nodos): habría que guardar los modelos de cada pliegue, lo
+    que exige mucha memoria con el \ac{RF}, o volver a entrenar a mano las
+    combinaciones empatadas. Por eso se ha optado por la elección
+    automática, que ahorra tiempo y mantiene el código más sencillo.
+    \item \textbf{Medir el sobreajuste durante la selección.} Sacando
+    también el error de entrenamiento de cada modelo dentro de la
+    validación cruzada, se podría ver en cada combinación si sobreajusta y
+    tenerlo en cuenta al elegir. Es posible con Spark, pero complica el
+    código y lo hace menos claro.
+    \item \textbf{Probar hojas más pequeñas en el \ac{RF}} (menos de 10
+    viajes), ya que el mejor valor quedó en el borde de la rejilla.
+\end{itemize}
+
+
 
 
 % =====================================================================
