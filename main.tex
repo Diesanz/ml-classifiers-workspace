@@ -127,6 +127,7 @@
 \listoffigures    % Índice de imágenes
 \listoftables     % Índice de tablas
 
+\clearpage
 % =====================================================================
 % ACRÓNIMOS: \ac{X} en el texto (la primera vez sale desarrollado);
 % \acs{X} en tablas, fórmulas y pies (solo la sigla).
@@ -163,7 +164,7 @@ el otro puede ser básico. Se han elegido dos modelos de Spark ML:
     (sección~\ref{sec:seleccion-rf}). Combina muchos árboles para reducir el
     sobreajuste de uno solo y admite directamente las tres clases, a
     diferencia de otros modelos de Spark, como los \textit{Gradient-Boosted
-    Trees}, que solo admiten clasificación binaria.
+    Trees}, que solo admiten directamente clasificación binaria.
 \end{itemize}
 Uno de los objetivos es comparar cómo se comportan dos modelos distintos con
 los mismos datos: si el modelo avanzado mejora de verdad al básico y a qué
@@ -245,9 +246,9 @@ En el primer entregable se eliminaban los viajes con pasajeros fuera de 1--6, co
 
 \paragraph{Pasajeros.} En el primer entregable se eliminaban los viajes con 0 pasajeros o con 7 a 9. \cambio{Son poco habituales, pero no imposibles: un viaje con 0 pasajeros puede ser un envío de paquetes, y uno de 7 a 9, una limusina o un vehículo de mayor capacidad. Su duración se registra igual que la de cualquier otro, así que su clase es correcta. Por eso se mantienen.}
 
-\paragraph{Viajes de 0 km.} En el primer entregable, los 3\,191 viajes de 0 km y más de 5 minutos se eliminaban porque contradicen a la distancia, el atributo que mejor separa las clases: un viaje sin desplazamiento debería ser corto, y si dura más de 5 minutos el modelo recibe un ejemplo que va en contra de esa regla. \cambio{Sin embargo, que la distancia registrada sea 0 no significa que el viaje no exista. Puede deberse a un atasco, con el taxi casi parado durante muchos minutos, algo habitual en el tráfico de Nueva York, o a que se registró como destino la misma dirección de recogida, por ejemplo en un viaje de ida y vuelta. En ambos casos la duración es real y su clase es correcta. Eliminarlos quitaría al modelo viajes que también aparecerán con datos nuevos, así que se mantienen: el modelo que se elija tendrá que aprender que, en esos casos, la distancia no es suficiente y decidir con el resto de atributos.}
+\paragraph{Viajes de 0 km.} En el primer entregable, los 3\,191 viajes de 0 km y más de 5 minutos se eliminaban porque contradicen a la distancia, el atributo que mejor separa las clases: un viaje sin desplazamiento debería ser corto, y si dura más de 5 minutos el modelo recibe un ejemplo que va en contra de esa regla. \cambio{Sin embargo, que la distancia registrada sea 0 no significa que el viaje no exista. Puede deberse a un atasco, con el taxi casi parado durante muchos minutos, o a que se registró como destino la misma dirección de recogida, por ejemplo en un viaje de ida y vuelta. En ambos casos la duración es real y su clase es correcta. Eliminarlos quitaría al modelo viajes que también aparecerán con datos nuevos, así que se mantienen: el modelo que se elija tendrá que aprender que, en esos casos, la distancia no es suficiente y decidir con el resto de atributos.}
 
-\paragraph{Duración.} En el primer entregable se eliminaban los viajes de menos de 60 s, porque un viaje real de menos de un minuto se consideró poco creíble, y los de más de 3 h, porque ese corte separaba el bloque anómalo de unas 24 h de los viajes largos normales y porque se consideró que un viaje de más de 3 horas era algo raro. \cambio{Al revisarlo, los dos cortes resultan demasiado estrictos. Las clases se definen solo a partir de la duración (\textit{short} hasta 10 minutos, \textit{medium} hasta 25 y \textit{long} a partir de ahí). Por eso, aunque un viaje de 30 s o de 5 h tenga una duración extrema, su etiqueta es correcta: el de 30 s es \textit{short} y el de 5 h es \textit{long}. En escala logarítmica (Figura~\ref{fig:logduracion}), por debajo de 60 s la distribución baja poco a poco, sin un salto, y entre 3 y 23 h solo hay 269 viajes, todos \textit{long} (como se vio en el entregable anterior): es el final normal de la distribución. Además, en Nueva York no es raro que un taxi tarde varias horas, por ejemplo en un viaje fuera de la ciudad o con mucho tráfico, así que estos viajes se mantienen. En cambio, los 1\,843 viajes de más de 23 h forman un pico aislado en torno a las 24 h, separado del resto. Por eso se consideran registros fallidos; una posible explicación, que no se puede comprobar con estos datos, es un taxímetro que no se apagó al terminar el viaje. Si es así, su duración real es desconocida y su etiqueta no es fiable, así que se eliminan.}
+\paragraph{Duración.} En el primer entregable se eliminaban los viajes de menos de 60 s, porque un viaje real de menos de un minuto se consideró poco creíble, y los de más de 3 h, porque ese corte separaba el bloque anómalo de unas 24 h de los viajes largos normales y porque se consideró que un viaje de más de 3 horas era algo raro. \cambio{Al revisarlo, los dos cortes resultan demasiado estrictos. Las clases se definen solo a partir de la duración (\textit{short} hasta 10 minutos, \textit{medium} hasta 25 y \textit{long} a partir de ahí). Por eso, aunque un viaje de 30 s o de 5 h tenga una duración extrema, su etiqueta es correcta: el de 30 s es \textit{short} y el de 5 h es \textit{long}. En escala logarítmica (Figura~\ref{fig:logduracion}), por debajo de 60 s la distribución baja poco a poco, sin un salto, y, en el conjunto completo, entre 3 y 23 h solo hay 269 viajes, todos \textit{long} (como se vio en el entregable anterior): es el final normal de la distribución. Además, puede ocurrir que un taxi tarde varias horas, por ejemplo en un viaje fuera de la ciudad o con mucho tráfico, así que estos viajes se mantienen. En cambio, los 1\,843 viajes de más de 23 h del conjunto completo forman un pico aislado en torno a las 24 h, separado del resto. Por eso se consideran registros fallidos; una posible explicación, que no se puede comprobar con estos datos, es un taxímetro que no se apagó al terminar el viaje. Si es así, su duración real es desconocida y su etiqueta no es fiable, así que se eliminan.}
 
 \begin{figure}[H]
 \centering
@@ -256,18 +257,18 @@ En el primer entregable se eliminaban los viajes con pasajeros fuera de 1--6, co
 \label{fig:logduracion}
 \end{figure}
 
-\paragraph{Coordenadas.} Para las coordenadas se usan dos rectángulos, como en el primer entregable. El \textbf{rectángulo ajustado} a la ciudad (latitud 40,477--40,917; longitud $-74{,}256$ a $-73{,}7$) solo sirve de referencia para ver qué viajes salen de Nueva York, y no elimina nada. El \textbf{rectángulo amplio} (latitud 40,0--41,5; longitud $-74{,}8$ a $-73{,}0$) marca el límite de lo imposible: lo que queda fuera está a cientos de kilómetros (hasta longitud $-121{,}93$), y esos viajes sí se eliminan. La Figura~\ref{fig:rectangulos} muestra los dos.
+\paragraph{Coordenadas.} Para las coordenadas se usan dos rectángulos, como en el primer entregable. El \textbf{rectángulo ajustado} a la ciudad (latitud 40,477 a 40,917; longitud $-74{,}256$ a $-73{,}7$) solo sirve de referencia para ver qué viajes salen de Nueva York, y no elimina nada. El \textbf{rectángulo amplio} (latitud 40,0 a 41,5; longitud $-74{,}8$ a $-73{,}0$) marca el límite de lo imposible: lo que queda fuera está a cientos de kilómetros (hasta longitud $-121{,}93$), y esos viajes sí se eliminan. La Figura~\ref{fig:rectangulos} muestra los dos.
 
-\cambio{En el primer entregable se indicó que quedaban fuera del rectángulo amplio 81 viajes, pero esa cifra era la suma de 35 recogidas y 46 destinos. Como 32 viajes tienen las dos coordenadas fuera, se contaron dos veces: en realidad son 49 viajes distintos.} \cambio{Los viajes que salen del rectángulo ajustado se mantienen: sus destinos tienen una distancia mediana de 22,6 km y una duración mediana de 34 min, frente a 2,1 km y 11 min de los de dentro, y el 67,8\,\% son \textit{long}, así que son viajes largos reales. Las recogidas de fuera también son posibles, por ejemplo un taxi que deja a un cliente fuera de la ciudad y recoge allí mismo al siguiente.}
+\cambio{En el primer entregable se indicó que quedaban fuera del rectángulo amplio 81 viajes, pero esa cifra era la suma de 35 recogidas y 46 destinos. Como 32 viajes tienen las dos coordenadas fuera, se contaron dos veces: en realidad son 49 viajes distintos en el conjunto completo.} \cambio{Los viajes que salen del rectángulo ajustado se mantienen: sus destinos tienen una distancia mediana de 22,6 km y una duración mediana de 34 min, frente a 2,1 km y 11 min de los de dentro, y el 67,8\,\% son \textit{long}, así que son viajes largos reales. Las recogidas de fuera también son posibles, por ejemplo un taxi que deja a un cliente fuera de la ciudad y recoge allí mismo al siguiente.}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{diagramas/mapa_rectangulos.png}
+\includegraphics[width=0.9\textwidth]{diagramas/mapa_rectangulos.png}
 \caption{Recogidas y destinos según el rectángulo en el que caen. Cada viaje aporta dos puntos, así que los 81 puntos rojos corresponden a 49 viajes y los más lejanos quedan fuera de la vista.}
 \label{fig:rectangulos}
 \end{figure}
 
-\cambio{Por último, algunos puntos de recogida o destino caen sobre el río. Ningún rectángulo los detecta, porque están dentro de la ciudad, y eliminarlos con precisión exigiría la forma exacta de la costa, algo que no se puede aplicar en la limpieza con un criterio sencillo como el de los rectángulos. Además, no tiene por qué tratarse de errores en el viaje: pueden deberse a la imprecisión del GPS cerca de la orilla o a los túneles que pasan bajo el río (Holland, Lincoln y Queens-Midtown), en los que un taxi aparece sobre el agua aunque circule con normalidad. La duración de esos viajes es real, así que su clase es correcta. Por eso se mantienen, además, en el mapa se aprecia que son muy pocos frente a los casi tres millones de puntos, así que su efecto en el modelo es despreciable.}
+\cambio{Por último, algunos puntos de recogida o destino caen sobre el río. Ningún rectángulo los detecta, porque están dentro de la ciudad, y eliminarlos con precisión exigiría conocer la forma exacta de la costa. Además, no tiene por qué tratarse de errores en el viaje: pueden deberse a la imprecisión del GPS cerca de la orilla o a los túneles que pasan bajo el río (Holland, Lincoln y Queens-Midtown), en los que un taxi aparece sobre el agua aunque circule con normalidad. La duración de esos viajes es real, así que su clase es correcta. Por eso se mantienen. Además, en el mapa se aprecia que son muy pocos frente a los casi tres millones de puntos, así que su efecto en el modelo es muy pequeño.}
 
 \paragraph{Resultado.} La limpieza se aplica con la misma función a entrenamiento y a prueba. En prueba, las filas eliminadas se cuentan como \ac{NTAIE} (coordenadas imposibles) o \ac{NTOE} (más de 23 h); si una fila cumple los dos criterios, cuenta como \acs{NTAIE}. La Tabla~\ref{tab:limpieza} compara el resultado con el del primer entregable.
 
@@ -318,8 +319,8 @@ Prueba        & \cambio{291\,371}   & \cambio{130\,235 (44,70\,\%)} & \cambio{12
 Se mantiene la construcción de atributos del primer entregable: la hora (\texttt{pickup\_hour}) y el día de la semana (\texttt{pickup\_day}) se extraen de \texttt{pickup\_datetime}, y la distancia (\texttt{distance\_km}) se calcula a partir de las coordenadas. \cambio{Estos atributos derivados se describen ahora en esta sección, y no en la exploración, porque construirlos a partir de los originales es una transformación de los datos.} Se aplican dos cambios:
 
 \begin{itemize}
-    \item \cambio{\textbf{Distancia Manhattan.} En el primer entregable la distancia se calculaba en línea recta (fórmula de Haversine), pero un taxi no circula en línea recta, sino por las calles. En Manhattan las calles forman una cuadrícula girada unos 29° respecto al norte, así que ahora se gira el desplazamiento ese ángulo y se suman el recorrido a lo largo de las avenidas y el recorrido a lo largo de las calles. El resultado se acerca más a la distancia que de verdad recorre el taxi, y por eso en este entregable se usa esta distancia en lugar de la de Haversine. El atributo mantiene el nombre \texttt{distance\_km}.}
-    \item \cambio{\textbf{Se elimina \texttt{store\_and\_fwd\_flag}.} En el primer entregable se mantenía porque con el valor \texttt{Y} había más viajes \textit{long} (22,3\,\% frente a 12,3\,\%), lo que parecía indicar cierta relación con la clase. Al revisarlo se ha considerado que no conviene usarlo, por dos motivos. Primero, solo indica si el registro se guardó en el vehículo antes de enviarse por falta de conexión, es decir, cómo se transmitió el dato, no una característica del viaje. Y segundo, solo afecta al 0,55\,\% de los viajes, así que apenas puede ayudar al modelo.}
+    \item \cambio{\textbf{Distancia Manhattan.} En el primer entregable la distancia se calculaba en línea recta (fórmula de Haversine), pero un taxi no circula en línea recta, sino por las calles. En Manhattan las calles forman una cuadrícula girada aproximadamente 29° respecto al norte, así que ahora se gira el desplazamiento ese ángulo y se suman el recorrido a lo largo de las avenidas y el recorrido a lo largo de las calles. El resultado se acerca más a la distancia que de verdad recorre el taxi: su correlación con la duración es 0,809, frente a 0,794 de la de Haversine. Por eso en este entregable se usa esta distancia en lugar de la de Haversine. El atributo mantiene el nombre \texttt{distance\_km}.}
+    \item \cambio{\textbf{Se elimina \texttt{store\_and\_fwd\_flag}.} En el primer entregable se mantenía porque con el valor \texttt{Y} había más viajes \textit{long} (22,3\,\% frente a 12,3\,\%), lo que parecía indicar cierta relación con la clase. Al revisarlo se ha considerado que no conviene usarlo, por dos motivos. Primero, solo indica si el registro se guardó en el vehículo antes de enviarse por falta de conexión~\cite{kaggle2017}, es decir, cómo se transmitió el dato, no una característica del viaje. Y segundo, solo afecta al 0,55\,\% de los viajes, así que apenas puede ayudar al modelo.}
 \end{itemize}
 
 Así, los atributos que entran en \texttt{features} son \cambio{ocho}: \texttt{passenger\_count}, las cuatro coordenadas, \texttt{distance\_km}, \texttt{pickup\_hour} y \texttt{pickup\_day}. \cambio{Al eliminar \texttt{store\_and\_fwd\_flag} desaparece también el \texttt{StringIndexer} que lo convertía en número, así que la transformación queda en dos pasos}:
@@ -328,7 +329,11 @@ Así, los atributos que entran en \texttt{features} son \cambio{ocho}: \texttt{p
     \item un \texttt{VectorAssembler} (\textit{transformer}) que junta los ocho atributos en \texttt{features}.
 \end{enumerate}
 
-\paragraph{Transformaciones según el modelo.} Los dos modelos elegidos, el \ac{DT} y el \ac{RF}, se basan en árboles: dividen los datos con preguntas del tipo ``¿el atributo es menor que un umbral?''. Por eso son insensibles a la escala de los atributos y no hace falta normalizarlos. Por el mismo motivo tampoco hace falta codificar la hora y el día con \textit{one-hot}: el árbol puede separar cualquier tramo de horas o de días con un par de umbrales. Además, el \textit{one-hot} añadiría muchas columnas (24 para la hora y 7 para el día), lo que haría el entrenamiento más lento sin aportar nada a un árbol. Por eso los dos modelos usan la misma transformación.
+\paragraph{Transformaciones según el modelo.} Los dos modelos elegidos para entrenar, el \ac{DT} y el \ac{RF}, se basan en árboles: dividen los datos con preguntas del tipo ``¿el atributo es menor que un umbral?''. Por eso son insensibles a la escala de los atributos y no hace falta normalizarlos. Por el mismo motivo tampoco hace falta codificar la hora y el día con
+\textit{one-hot}: el árbol puede separar cualquier tramo seguido de horas o
+de días con un par de umbrales. Además, el \textit{one-hot} añadiría muchas
+columnas (24 para la hora y 7 para el día), lo que haría el entrenamiento más
+lento sin una ventaja clara para un árbol.
 
 \paragraph{Resumen de los cambios.} La Tabla~\ref{tab:atributos} resume los cambios respecto al primer entregable.
 
@@ -408,16 +413,20 @@ tercero. Los motivos para usar 3 y no más son:
     modelo final, que se entrena con todo, y el resultado depende menos de
     cómo hayan quedado repartidos los viajes entre los pliegues. A cambio,
     cada combinación se entrena $k$ veces, así que el número de modelos es
-    el número de combinaciones por $k$~\cite{spark_tuning}. Con 10 pliegues
+    el número de combinaciones por $k$~\cite{spark_tuning}, \cite[cap.~6]{raschka2022}. Con 10 pliegues
     se entrenarían más del triple de modelos, y cada uno con más datos: la
     fase gruesa del \ac{DT}, que con 3 pliegues tarda una hora, pasaría a
     tardar unas cuatro, y la del \ac{RF} mucho más.
     \item \textbf{Con tantos datos, más pliegues apenas mejoran la
-    estimación.} Más pliegues sirven sobre todo cuando hay pocos datos:
-    cada modelo entrena con más viajes y la estimación es menos pesimista.
-    Aquí cada pliegue de validación ya tiene unos 388\,000 viajes, y con
-    conjuntos grandes basta con un $k$ pequeño para obtener una estimación
-    fiable~\cite{raschka2022}.
+    estimación.} Usar pocos pliegues tiene dos inconvenientes: cada modelo
+    se entrena con menos datos, así que la estimación es algo pesimista, y
+    el resultado depende más de cómo se repartieron los viajes entre los
+    pliegues. Sin embargo, estos inconvenientes son menos importantes
+    cuanto mayor es el conjunto de datos~\cite[sec.~3.5]{raschka2018}, y el
+    aumento de la variabilidad con $k = 2$ o $3$ se da sobre todo con
+    conjuntos pequeños~\cite[sec.~3.6]{raschka2018}. Aquí, con 3 pliegues,
+    cada modelo se entrena con unos 777\,000 viajes y se valida con unos
+    388\,000.
     \item \textbf{Es un valor habitual.} La documentación de Spark indica
     que 3 y 10 son los valores más comunes y usa $k = 3$ en su
     explicación~\cite{spark_tuning}.
@@ -425,7 +434,7 @@ tercero. Los motivos para usar 3 y no más son:
 No hace falta estratificar los pliegues, es decir, forzar que cada uno
 tenga la misma proporción de cada clase. Al repartir los viajes al azar, la
 proporción de una clase en un pliegue varía como cualquier proporción
-calculada sobre una muestra~\cite{mitchell1997}. Para \textit{long}, la clase
+calculada sobre una muestra\cite[cap.~5]{mitchell1997}. Para \textit{long}, la clase
 minoritaria y la más sensible, con $p = 0{,}1226$ y unos $n = 388\,000$
 viajes por pliegue:
 \[
@@ -455,7 +464,7 @@ son:
     \textit{recall}, la precisión y la F-measure se calculan para una sola
     clase: elegir con ellas favorecería esa clase a costa de las otras dos,
     y aquí ningún tipo de error es más grave que otro. El área bajo la curva
-    ROC o la PR solo se define para dos clases. La F-measure ponderada por
+    \ac{ROC} o la \ac{PR} solo se define para dos clases. La F-measure ponderada por
     el tamaño de cada clase da prácticamente lo mismo que el acierto.
 \end{enumerate}
 Los dos modelos se seleccionan con la misma métrica para poder compararlos.
@@ -531,13 +540,16 @@ Los dos controlan lo mismo desde lados distintos, cuánto puede crecer el
     \item \texttt{maxBins} = 32 (valor por defecto). Es el número de
     intervalos en que se divide cada atributo continuo para buscar los
     cortes. En el entregable individual cada integrante del grupo lo
-    analizó, y la mayoría llegó a la misma conclusión: con la misma
-    profundidad, cambiarlo modificaba el error en menos que el margen de
-    ruido, porque la distancia, el atributo que más separa las clases, se
-    divide bien con pocos cortes. Incluirlo en la rejilla multiplicaría el
-    número de combinaciones (por tres, si se probaran tres valores) sin
-    esperar ninguna mejora, y con más intervalos cada árbol tarda más y usa
-    más memoria.
+    analizó por su cuenta, aunque con el problema binario y con la limpieza
+    anterior, y la mayoría llegó a la misma conclusión: con la misma
+    profundidad, cambiarlo apenas modificaba el error, menos que el margen
+    de ruido. Una posible explicación es que la distancia, el atributo que
+    más separa las clases, se pueda dividir bien con pocos cortes. Al poner
+    en común esos resultados, el grupo decidió dejarlo fijo en su valor por
+    defecto. Si se decidiera incluirlo como un parámetro más de la rejilla,
+    el número de combinaciones se multiplicaría (por tres, si se probaran
+    tres valores) sin esperar una posible mejora, y además, con más
+    intervalos, cada árbol tardaría más en entrenarse y usaría más memoria.
     \item \texttt{impurity} = \texttt{gini} (valor por defecto). Es la medida
     con la que se elige la mejor pregunta en cada nodo. La alternativa,
     \texttt{entropy}, suele dar resultados muy parecidos, y no suele
@@ -548,8 +560,7 @@ Los dos controlan lo mismo desde lados distintos, cuánto puede crecer el
 \end{itemize}
 
 Además, la validación cruzada entrena dos árboles a la vez
-(\texttt{setParallelism(2)}), lo que reduce el tiempo a la tercera parte
-respecto a entrenarlos de uno en uno. No se entrenan más a la vez porque la
+(\texttt{setParallelism(2)}), lo que reduce el tiempo hasta casi la mitad respecto a entrenarlos de uno en uno. No se entrenan más a la vez porque la
 máquina tiene 4 núcleos, que se reparten entre los modelos, así que el
 tiempo apenas bajaría y aumentaría el riesgo de quedarse sin memoria.
 
@@ -662,8 +673,9 @@ cruzada. En negrita, la combinación que selecciona \texttt{CrossValidator}.}
 \begin{itemize}
     \item El mínimo de \textbf{50 viajes} por hoja es el mejor con todas las
     profundidades. Con 25 y 75 el acierto baja unas 0,001, y con 150 unas
-    0,003: con hojas más pequeñas el árbol empieza a sobreajustar, y con
-    hojas más grandes pierde detalle.
+    0,003. La bajada con 25 y 75 es cercana al margen de ruido, mientras
+    que con 150 el resultado ya es claramente peor: con hojas más grandes
+    el árbol pierde detalle.
     \item Con 50 viajes por hoja, las profundidades \textbf{21, 23 y 25} dan
     el mismo acierto, 0,7993, y la 18 solo un poco menos (0,7986). A partir
     de 21 el acierto ya no cambia.
@@ -699,7 +711,7 @@ Profundidad real / número de nodos & 25 / 7\,601 \\
 mínimo de 50 viajes por hoja obtienen el mismo acierto, 0,7993, y (18, 50)
 se queda en 0,7986. Cada acierto es una estimación, que depende de qué
 viajes han caído en cada pliegue. Aplicando la misma fórmula del intervalo
-de confianza que en la evaluación~\cite{mitchell1997}, con un acierto de
+de confianza que en la evaluación\cite[cap.~5]{mitchell1997}, con un acierto de
 0,7993, el margen al 95\,\% es:
 \[
 \pm\, 1{,}96 \sqrt{\frac{0{,}7993 \cdot 0{,}2007}{1\,165\,381}}
@@ -743,7 +755,7 @@ la media de muchos árboles distintos la varianza baja sin que suba el
 sesgo~\cite[cap.~7]{raschka2022}.
 
 \paragraph{Por qué el \ac{RF}.} Los \textit{Gradient-Boosted Trees}, que
-combinan árboles con \textit{boosting}, solo admiten clasificación binaria
+combinan árboles con \textit{boosting}, solo admiten directamente clasificación binaria
 en Spark. Naive Bayes supone que los atributos son independientes, y aquí
 no lo son (la distancia sale de las coordenadas). El \ac{RF}, en cambio, admite directamente las tres clases, capta
 relaciones no lineales, usa la misma transformación que el \ac{DT}
@@ -953,7 +965,7 @@ fina ya tardó más de seis horas.
 
 Una vez elegidos los parámetros, cada modelo final se evalúa sobre el
 conjunto de prueba. Es la primera y única vez que se usa: no ha intervenido
-en la limpieza, en la transformación ni en la selección, así que sus
+en la creación ni en la selección de los modelos, así que sus
 resultados indican cómo se comportará el modelo con viajes nuevos. Primero
 se describe cómo se calcula cada métrica (sección~\ref{sec:eval-metodologia})
 y después los resultados del \ac{DT} (sección~\ref{sec:eval-dt}) y del
@@ -1003,10 +1015,10 @@ Tasa de \acs{FP} por clase & $\dfrac{\acs{FP}}{\acs{FP} + \acs{TN}}$ & Viajes de
 Precisión por clase & $P = \dfrac{\acs{TP}}{\acs{TP} + \acs{FP}}$ & Aciertos entre los predichos como esa clase \\
 F-measure por clase & $F = \dfrac{2PR}{P+R}$ & Equilibrio entre precisión ($P$) y tasa de \acs{TP} ($R$) \\
 Áreas \acs{ROC} y \acs{PR} & Área bajo cada curva & Separación de \textit{long} frente al resto, con todos los umbrales \\
-Tasa de no clasificados & $\dfrac{\acs{NTAIE} + \acs{NTOE}}{n_{\text{prueba}}}$ & Viajes de prueba eliminados en la limpieza \\
+Tasa de no clasificados & $\dfrac{\acs{NTAIE} + \acs{NTOE}}{n_{\text{prueba}}}$ & Viajes de prueba eliminados en la limpieza ($n_{\text{prueba}}$, antes de limpiar) \\
 \bottomrule
 \end{tabular}
-\caption{Métricas de evaluación. En las métricas por clase, \acs{TP}, \acs{FN}, \acs{FP} y \acs{TN} se cuentan tomando esa clase como positiva y las otras dos como negativas.}
+\caption[Métricas de evaluación.]{Métricas de evaluación. En las métricas por clase, los casos \acf{TP}, \acf{FN}, \acf{FP} y \acf{TN} se cuentan tomando esa clase como positiva y las otras dos como negativas.}
 \label{tab:metricas-eval}
 \end{table}
 
@@ -1032,7 +1044,7 @@ $e_S = 0{,}1983$. Es una estimación del error verdadero $e_D$ del modelo,
 que depende de qué viajes han caído en el conjunto de prueba. Cada viaje
 se trata como un ensayo en el que el modelo acierta o falla, así que el
 número de errores sigue una distribución binomial, que se puede aproximar
-por una normal si $n \geq 30$ y $n\,e_S(1-e_S) \geq 5$~\cite{mitchell1997}.
+por una normal si $n \geq 30$ y $n\,e_S(1-e_S) \geq 5$\cite[cap.~5]{mitchell1997}.
 Aquí se cumple de sobra: $291\,371 \cdot 0{,}1983 \cdot 0{,}8017 \approx
 46\,320$. Con esa aproximación:
 \[
@@ -1115,9 +1127,9 @@ prueba. En verde, los viajes bien clasificados.}
 Casi todos los errores son entre clases vecinas: \textit{short} con
 \textit{medium} y \textit{medium} con \textit{long}. \textit{Short} y
 \textit{long} apenas se confunden: solo 17 viajes cortos se predicen como
-largos y 736 largos como cortos. Es lo esperable, porque las clases salen
-de cortar la duración en 10 y 25 minutos: un viaje de 24 minutos y otro de
-26 son casi iguales, pero caen en clases distintas.
+largos y 736 largos como cortos. Es lo esperable, porque las clases salen de cortar la duración en 10 y
+25 minutos: un viaje de 24 minutos y otro de 26 son casi iguales, pero caen
+en clases distintas, así que es fácil que el modelo los confunda.
   
 \paragraph{Métricas por clase.} La tabla~\ref{tab:metricas-dt} recoge las
 tasas y la F-measure de cada clase.
@@ -1142,7 +1154,7 @@ tasas y la F-measure de cada clase.
     \item \textbf{\textit{Short}} es la clase mejor clasificada: el árbol
     reconoce el 86,6\,\% de los viajes cortos.
     \item \textbf{\textit{Medium}} tiene casi tantos viajes como
-    \textit{short}, pero peores resultados. No se debe a su tamaño, sino a
+    \textit{short}, pero peores resultados. Probablemente no se debe a su tamaño, sino a
     que es la clase intermedia: se confunde con las dos que tiene a los
     lados, y por eso tiene la tasa de \acs{FP} más alta.
     \item \textbf{\textit{Long}} es el punto débil: el árbol solo reconoce
@@ -1194,7 +1206,7 @@ posibles, y sus áreas resumen cada curva en un número:
 área \acs{ROC} se ve favorecida por los muchos viajes de otras clases que
 son fáciles de descartar. El área \acs{PR} no, porque solo se fija en los
 viajes \textit{long}, y que también sea alta confirma que el árbol
-reconoce bien esta clase.
+separa bien esta clase del resto.
 
 Aun así, con el umbral por defecto el árbol solo detecta el 65\,\% de los
 \textit{long} (Tabla~\ref{tab:metricas-dt}). Que las áreas sean altas
@@ -1249,11 +1261,12 @@ cruzada y prueba.}
     árboles, así que, al predecirlo, la mayoría de los árboles ya lo
     conocen. Ese 63\,\% sale de que la probabilidad de que un viaje no
     salga en una muestra con reemplazo de $n$ viajes es
-    $(1 - 1/n)^n \approx e^{-1} \approx 0{,}37$~\cite{raschka2022}.
-    \item \textbf{Ese sobreajuste no perjudica a los viajes nuevos.} Si se
-    reduce, usando hojas de 50 viajes, el error en validación cruzada
-    empeora: 0,1912 en lugar de 0,1850. Es decir, con menos sobreajuste el
-    bosque clasifica peor los viajes que no ha visto.
+    $(1 - 1/n)^n \approx e^{-1} \approx 0{,}37$~\cite[sec.~2.4]{raschka2018}.
+    \item \textbf{Ese sobreajuste no perjudica a los viajes nuevos.} Con hojas
+    de 50 viajes, que deberían sobreajustar menos, el error en validación
+    cruzada es mayor: 0,1912 en lugar de 0,1850. Es decir, limitar más el
+    tamaño de las hojas no hace que el bosque clasifique mejor los viajes
+    que no ha visto.
 \end{itemize}
 
 \paragraph{Clasificador trivial y no clasificados.} El error (0,1835) es mucho menor que el del
@@ -1414,9 +1427,11 @@ no en todas por igual:
     (precisión de 0,799 a 0,829) y separa mejor esta clase del resto, como
     muestran las áreas \acs{ROC} y \acs{PR}.
     \item El punto débil es el mismo en los dos modelos: un tercio de los
-    viajes \textit{long} se clasifican como \textit{medium}. Con los
-    atributos disponibles, ninguno de los dos distingue bien los viajes
-    que están cerca de los 25 minutos.
+    viajes \textit{long} se clasifican como \textit{medium}, y casi ninguno
+    como \textit{short}. Como el corte entre las dos clases está en 25
+    minutos, es probable que se trate sobre todo de viajes que duran poco
+    más de ese tiempo, difíciles de separar de los \textit{medium} con los
+    atributos disponibles.
 \end{itemize}
 
 \paragraph{Diferencia de coste.} La mejora tiene un precio alto. El bosque tiene
@@ -1463,13 +1478,13 @@ los dos modelos.
     ya se vio en la exploración del primer entregable, pero en el \ac{RF}
     pesa bastante menos (0,55 frente a 0,74).
     \item \textbf{Las coordenadas pesan más en el \ac{RF}}: entre las cuatro
-    pasan de 0,12 a 0,29. Es el efecto del sorteo de atributos: en los
+    pasan de 0,12 a 0,29. Probablemente se debe al sorteo de atributos: en los
     nodos donde la distancia no sale elegida, el árbol tiene que usar otro
     atributo, y así el bosque aprende también de las zonas de recogida y
     destino. Puede ser parte de la razón por la que mejora al \ac{DT}.
     \item \textbf{La hora y el día pesan lo mismo en los dos} (0,10 y
-    0,04): a la misma distancia, un viaje tarda más en las horas y los días
-    de más tráfico.
+    0,04), lo que encaja con que, a la misma distancia, un viaje tarde más en las
+    horas y los días de más tráfico.
     \item \textbf{El número de pasajeros casi no aporta} en ninguno de los
     dos.
 \end{itemize}
@@ -1483,11 +1498,11 @@ los dos modelos.
 El \ac{RF} es el mejor de los dos modelos: su error en prueba es 0,1835,
 frente a 0,1983 del \ac{DT}, una mejora real porque los intervalos de
 confianza no se solapan. A cambio, es unas 137 veces más grande, su
-búsqueda tardó unas cuatro veces más y no se puede interpretar. El
-\ac{DT}, mucho más sencillo, falla solo un 1,5\,\% más de viajes (19,83\,\%
+búsqueda tardó unas cuatro veces más y es mucho más difícil de interpretar. El
+\ac{DT}, mucho más sencillo, falla solo 1,5 puntos más de viajes (19,83\,\%
 frente a 18,35\,\%).
 
-Creemos que sí merece la pena utilizar RF cuando la prioridad es minimizar el número de errores y disponemos de recursos suficientes para asumir su coste. En este caso, consigue clasificar correctamente 4\,309 viajes más que el DT, una mejora estadísticamente significativa, aunque a cambio requiere unas cuatro veces más tiempo de búsqueda, mucha más memoria y genera un modelo considerablemente más complejo. Sin embargo, si se priorizan la rapidez, la sencillez o la interpretabilidad, el DT puede ser una opción más conveniente, ya que ofrece resultados bastante similares con un coste mucho menor. Por tanto, la elección depende de las necesidades de cada aplicación: RF cuando cada mejora en la precisión importa, y DT cuando esa mejora no compensa el coste adicional.
+Creemos que sí merece la pena utilizar el \ac{RF} cuando la prioridad es minimizar el número de errores y disponemos de recursos suficientes para asumir su coste. En este caso, consigue clasificar correctamente 4\,309 viajes más que el \ac{DT}, una mejora estadísticamente significativa, aunque a cambio requiere unas cuatro veces más tiempo de búsqueda, mucha más memoria y genera un modelo considerablemente más complejo. Sin embargo, si se priorizan la rapidez, la sencillez o la interpretabilidad, el \ac{DT} puede ser una opción más conveniente, ya que ofrece resultados bastante similares con un coste mucho menor. Por tanto, la elección depende de las necesidades de cada aplicación: el \ac{RF} cuando cada mejora en el acierto importa, y el \ac{DT} cuando esa mejora no compensa el coste adicional.
 
 Por otro lado la revisión de la limpieza ha funcionado: al eliminar solo los registros
 imposibles, la tasa de no clasificados baja del 1,00\,\% al 0,143\,\%, y
@@ -1500,9 +1515,9 @@ más justa.
 \paragraph{Limitaciones.}
 \begin{itemize}
     \item Los dos modelos fallan en lo mismo: un tercio de los viajes
-    \textit{long} se clasifican como \textit{medium}. Con los atributos
-    disponibles, no se pueden separar bien los viajes cercanos a los 25
-    minutos.
+    \textit{long} se clasifican como \textit{medium}. Probablemente se trata de
+    viajes cercanos a los 25 minutos, difíciles de separar con los atributos
+    disponibles.
     \item La selección de parámetros solo tiene en cuenta el acierto medio
     en la validación cruzada. Otras características, como el tamaño del
     modelo, el tiempo de entrenamiento o el sobreajuste, no intervienen en
@@ -1515,7 +1530,8 @@ más justa.
 \begin{itemize}
     \item \textbf{Ajustar el umbral de \textit{long}.} Las áreas \acs{ROC} y
     \acs{PR} son altas, así que bajando el umbral se detectarían más viajes
-    \textit{long} sin muchos más errores.
+    \textit{long}, a costa de algunos \textit{medium} mal clasificados. El
+    umbral habría que elegirlo sin usar el conjunto de prueba.
     \item \textbf{Probar otras selecciones de atributos.} La importancia de
     los atributos indica cuáles usa más cada modelo, pero para saber si
     alguno sobra habría que volver a entrenar sin él (por ejemplo, sin el
@@ -1599,6 +1615,32 @@ Diego Sanz Santos & Coordinación, revisión de la limpieza y de la exploración
 \nocite{*}                 % muestra todas las entradas del .bib aunque no se citen
 \bibliographystyle{unsrt}  % numeradas por orden de aparición en el texto
 \bibliography{referencias}
+
+\newpage
+\appendix
+\section{Contenido del entregable}
+\label{sec:contenido}
+
+El fichero \texttt{G3-ES3.zip} contiene:
+\begin{itemize}
+    \item \texttt{preparacionDatos.scala}: carga, partición, limpieza y
+    transformación de los datos. Es el único script donde se indican la ruta
+    y el nombre del fichero de datos (\texttt{PATH} y \texttt{FILE}); los
+    demás lo cargan.
+    \item \texttt{crearArbolDecision.scala} y \texttt{crearRandomForest.scala}:
+    crean y seleccionan cada modelo y lo guardan en \texttt{./modeloDT} y
+    \texttt{./modeloRF}.
+    \item \texttt{evaluacionComun.scala}: carga la preparación de datos y
+    define las funciones que calculan las métricas. No está pensado para
+    lanzarse por separado: lo cargan los dos scripts de evaluación.
+    \item \texttt{evaluarArbolDecision.scala} y
+    \texttt{evaluarRandomForest.scala}: leen cada modelo ya entrenado y lo
+    evalúan sobre el conjunto de prueba.
+    \item \texttt{modeloDT} y \texttt{modeloRF}: los dos modelos finales.
+    \item Esta memoria y el primer entregable corregido.
+\end{itemize}
+Los scripts se lanzan con \texttt{spark-shell --driver-memory 8g}
+(sección~\ref{sec:metodologia}).
 
 
 \end{document}
