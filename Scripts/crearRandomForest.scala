@@ -82,17 +82,19 @@ def validacionCruzada(rejilla: Array[ParamMap], titulo: String): CrossValidatorM
 //    corrige el sobreajuste, pero los árboles muy profundos son mucho más lentos
 //  - 2 x 3 = 6 combinaciones x 3 pliegues = 18 bosques
 
-// Ya ejecutada (resultados en la memoria). Poner a true para repetirla; tarda unas 2 h
+// Poner a false para saltarla (tarda unas 2 h) y usar los resultados ya obtenidos (en la memoria)
 val ejecutarFase1 = true
 
 
-// Mejor combinación de la fase 1 en la ejecución ya hecha.
+// Mejor combinación de la fase 1 (se rellena en el if de abajo)
 // Si se repite la fase 1, se sustituyen por los que salgan
-var mejorArbolesFase1 = 50
-var mejorProfundidadFase1 = 20
-var mejorMinInstanciasFase1 = 50
-var mejorAciertoFase1 = 0.8085
+var mejorArbolesFase1 = 0
+var mejorProfundidadFase1 = 0
+var mejorMinInstanciasFase1 = 0
+var mejorAciertoFase1 = 0.0
 
+// Mejor combinación de la fase 1: se calcula si se ejecuta la fase, y si no,
+// se toman los valores de la ejecución (con esta misma semilla) ya hecha (resultados en la memoria)
 if (ejecutarFase1) {
   val rejillaGruesa = new ParamGridBuilder().
     addGrid(RFtaxi.numTrees, Array(20, 50)).
@@ -105,6 +107,11 @@ if (ejecutarFase1) {
   mejorProfundidadFase1 = mejorFase1.getMaxDepth
   mejorMinInstanciasFase1 = mejorFase1.getMinInstancesPerNode
   mejorAciertoFase1 = cvGruesa.avgMetrics.max
+}else{
+  mejorArbolesFase1 = 50
+  mejorProfundidadFase1 = 20
+  mejorMinInstanciasFase1 = 50
+  mejorAciertoFase1 = 0.8085
 }
 
 println(f"\nMejor combinación de la fase 1: numTrees = $mejorArbolesFase1, " +
@@ -114,12 +121,10 @@ println("La fase 2 busca alrededor de esa combinación")
 
 
 // Fase 2: búsqueda fina a partir de lo visto en la fase 1
-//  - numTrees fijo en 20: en la fase 1, pasar de 20 a 50 solo mejora 0,0009 (menos que el
+//  - numTrees fijo en 20: en la fase 1, pasar de 20 a 50 solo mejora 0,0009 (en el límite del
 //    margen de ruido) y tarda más del doble
 //  - maxDepth: el acierto seguía subiendo en 20, el borde de la rejilla, así que se prueba
 //    más profundidad (30 es el máximo de Spark)
-//  - minInstancesPerNode: en el RF el promedio corrige el sobreajuste, así que se prueban
-//    hojas más pequeñas que en el DT
 //  - minInstancesPerNode: en la fase 1 se fijó en 50 (el mejor del DT) para reducir la
 //    rejilla. Como el acierto sigue subiendo al dar más capacidad a los árboles, y el
 //    promedio del RF corrige el sobreajuste, se prueban también hojas más pequeñas (10)
@@ -159,5 +164,6 @@ featureCols.zip(bestModel.featureImportances.toArray).sortBy(-_._2).foreach { ca
   println(f"  $a%-20s $imp%1.4f")
 }
 
+// Comentar estas líneas para no sobrescribir el modelo ya guardado en ./modeloRF
 bestModel.write.overwrite().save(RUTA_MODELO)
 println(s"Modelo guardado en ${RUTA_MODELO}")

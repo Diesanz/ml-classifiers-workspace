@@ -3,6 +3,11 @@
 // Carga evaluacionComun.scala (que a su vez ejecuta la preparación de datos),
 // lee el modelo previamente generado desde la carpeta ./modeloRF (sin volver a crearlo)
 // y evalúa las predicciones sobre el conjunto de prueba (testFinal) usando la función evaluar() de evaluacionComun.
+// Al final calcula también el error en entrenamiento, para compararlo con el de prueba.
+
+// Lanzar spark-shell con más memoria para el driver (en modo local hace también de executor):
+//   spark-shell --driver-memory 8g
+// El bosque tiene más de un millón de nodos y no cabe en el 1 GiB que Spark usa por defecto
 
 :load evaluacionComun.scala
 

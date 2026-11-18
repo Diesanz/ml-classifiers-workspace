@@ -14,6 +14,9 @@ import org.apache.spark.ml.param.ParamMap
 
 :load preparacionDatos.scala
 
+// Carpeta donde se guarda el modelo final (en el enunciado se pide ./modeloXX)
+val RUTA_MODELO = "./modeloDT"
+
 // Se cachea porque la validación cruzada lo recorre muchas veces
 trainFinal.cache()
 println(s"Viajes de entrenamiento: ${trainFinal.count()}")
@@ -46,9 +49,10 @@ def validacionCruzada(rejilla: Array[ParamMap], titulo: String): CrossValidatorM
     // 3 pliegues: cada uno valida con ~388 000 viajes, suficiente para una estimación estable.
     // Con 5 o 10 la estimación apenas mejoraría y el tiempo se multiplicaría
     setNumFolds(3).
-    // 1 árbol a la vez: con 2 en paralelo, los árboles profundos agotaban la memoria
-    // y la ejecución llegó a quedarse colgada
-    setParallelism(1).
+    // 2 árboles a la vez: con 8 GiB de driver funciona y tarda unas 3 veces menos que de uno
+    // en uno. Más de 2 apenas acelera (la máquina tiene 4 núcleos, que se reparten entre los
+    // modelos) y aumenta el riesgo de quedarse sin memoria con los árboles profundos
+    setParallelism(2).
     setSeed(2627L)       // mismos pliegues en cada ejecución (resultados reproducibles)
 
   val inicio = System.nanoTime()
@@ -70,15 +74,16 @@ def validacionCruzada(rejilla: Array[ParamMap], titulo: String): CrossValidatorM
 //  - minInstancesPerNode: 1 (por defecto, sin restricción), 50, 100 y 1000, para ver
 //    desde árboles sin límite (sobreajuste) hasta hojas muy grandes (subajuste)
 
-// Ya ejecutada (resultados en la memoria). Poner a true para repetirla; tarda alrededor de 1 h
-val ejecutarFase1 = false
+// Poner a false para saltarla (tarda alrededor de 1 h) y usar los resultados ya obtenidos (en la memoria)
+val ejecutarFase1 = true
 
-// Mejor combinación de la fase 1 en la ejecución ya hecha.
-// Si se repite la fase 1, se sustituyen por los que salgan
-var mejorProfundidadFase1 = 25
-var mejorMinInstanciasFase1 = 50
-var mejorAciertoFase1 = 0.7993
+// Mejor combinación de la fase 1 (se rellena en el if de abajo)
+var mejorProfundidadFase1 = 0
+var mejorMinInstanciasFase1 = 0
+var mejorAciertoFase1 = 0.0
 
+// Mejor combinación de la fase 1: se calcula si se ejecuta la fase, y si no,
+// se toman los valores de la ejecución (con esta misma semilla) ya hecha (resultados en la memoria)
 if (ejecutarFase1) {
   val rejillaGruesa = new ParamGridBuilder().
     addGrid(DTtaxi.maxDepth, Array(5, 10, 15, 20, 25)).
@@ -90,6 +95,10 @@ if (ejecutarFase1) {
   mejorProfundidadFase1 = mejorFase1.getMaxDepth
   mejorMinInstanciasFase1 = mejorFase1.getMinInstancesPerNode
   mejorAciertoFase1 = cvGruesa.avgMetrics.max
+}else{
+  mejorProfundidadFase1 = 25
+  mejorMinInstanciasFase1 = 50
+  mejorAciertoFase1 = 0.7993
 }
 
 println(f"\nMejor combinación de la fase 1: maxDepth = $mejorProfundidadFase1, " +
@@ -118,14 +127,24 @@ println(s"\nMejor configuración: maxDepth = ${bestModel.getMaxDepth}, " +
 println(f"Tasa de acierto media: $mejorAcierto%1.4f  (error = ${1 - mejorAcierto}%1.4f)")
 println(s"Profundidad real: ${bestModel.depth}  Nodos: ${bestModel.numNodes}  maxBins: ${bestModel.getMaxBins}")
 
+
 // Comparación con la fase 1
-if (bestModel.getMaxDepth == mejorProfundidadFase1 &&
-    bestModel.getMinInstancesPerNode == mejorMinInstanciasFase1)
+if (bestModel.getMaxDepth == mejorProfundidadFase1 && bestModel.getMinInstancesPerNode == mejorMinInstanciasFase1){
   println("\nLa fase 2 confirma la mejor combinación de la fase 1")
-else
+}else{
   println(s"\nLa fase 2 cambia la mejor combinación: " +
           s"fase 1 (maxDepth = $mejorProfundidadFase1, minInstancesPerNode = $mejorMinInstanciasFase1) -> " +
           s"fase 2 (maxDepth = ${bestModel.getMaxDepth}, minInstancesPerNode = ${bestModel.getMinInstancesPerNode})")
+}
+println(f"Acierto: fase 1 = $mejorAciertoFase1%1.4f, fase 2 = $mejorAcierto%1.4f " +
+        f"(diferencia = ${mejorAcierto - mejorAciertoFase1}%+1.4f)")
 
-bestModel.write.overwrite().save("./modeloDT")
-println("Modelo guardado en ./modeloDT")
+// Importancia de cada atributo en el árbol (cuánto reduce el Gini en total)
+println("\nImportancia de los atributos:")
+featureCols.zip(bestModel.featureImportances.toArray).sortBy(-_._2).foreach { case (a, imp) =>
+  println(f"  $a%-20s $imp%1.4f")
+}
+
+// Comentar estas líneas para no sobrescribir el modelo ya guardado en ./modeloDT
+bestModel.write.overwrite().save(RUTA_MODELO)
+println(s"Modelo guardado en ${RUTA_MODELO}")
