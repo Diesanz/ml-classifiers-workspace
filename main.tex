@@ -1623,21 +1623,22 @@ Diego Sanz Santos & Coordinación, revisión de la limpieza y de la exploración
 
 El fichero \texttt{G3-ES3.zip} contiene:
 \begin{itemize}
-    \item \texttt{preparacionDatos.scala}: carga, partición, limpieza y
+    \item Scripts/\texttt{preparacionDatos.scala}: carga, partición, limpieza y
     transformación de los datos. Es el único script donde se indican la ruta
     y el nombre del fichero de datos (\texttt{PATH} y \texttt{FILE}); los
     demás lo cargan.
-    \item \texttt{crearArbolDecision.scala} y \texttt{crearRandomForest.scala}:
+    \item Scripts/\texttt{crearArbolDecision.scala} y Scripts/\texttt{crearRandomForest.scala}:
     crean y seleccionan cada modelo y lo guardan en \texttt{./modeloDT} y
     \texttt{./modeloRF}.
-    \item \texttt{evaluacionComun.scala}: carga la preparación de datos y
+    \item Scripts/\texttt{evaluacionComun.scala}: carga la preparación de datos y
     define las funciones que calculan las métricas. No está pensado para
     lanzarse por separado: lo cargan los dos scripts de evaluación.
-    \item \texttt{evaluarArbolDecision.scala} y
-    \texttt{evaluarRandomForest.scala}: leen cada modelo ya entrenado y lo
+    \item Scripts/\texttt{evaluarArbolDecision.scala} y
+    Scripts/\texttt{evaluarRandomForest.scala}: leen cada modelo ya entrenado y lo
     evalúan sobre el conjunto de prueba.
-    \item \texttt{modeloDT} y \texttt{modeloRF}: los dos modelos finales.
-    \item Esta memoria y el primer entregable corregido.
+    \item Scripts/\texttt{modeloDT} y Scripts/\texttt{modeloRF}: los dos modelos finales.
+    \item Scripts/\texttt{exploracion-datos.ipynb} y Scripts/\texttt{descripcion-atributos.ipynb}: exploración del dataset, actualizado tras las correcciones.
+    \item Esta memoria (\texttt{E3\_MemoriaG3Final.pdf}) y el primer entregable corregido (\texttt{E1\_MemoriaG3Revisada.pdf}).
 \end{itemize}
 Los scripts se lanzan con \texttt{spark-shell --driver-memory 8g}
 (sección~\ref{sec:metodologia}).
